@@ -1,0 +1,23 @@
+entryPoints:
+  http:
+    address: :80
+  https:
+    address: :443
+
+providers:
+  providersThrottleDuration: 2s
+  docker:
+    watch: true
+    network: docker
+    swarmModeRefreshSeconds: 15s
+  file:
+    filename: certs.yml
+api:
+  dashboard: true
+  insecure: true
+
+log:
+  level: ERROR
+  format: common
+
+

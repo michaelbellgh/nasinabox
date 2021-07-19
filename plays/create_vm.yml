@@ -1,0 +1,164 @@
+---
+
+ - name: Build NAS VM
+   gather_facts: false
+   hosts: esxi
+   connection: local
+
+   tasks:
+    - name: Load VM variables
+      include_vars:
+        file: "../data/vars/vm.yml"
+        name: vm_vars
+
+    - name: Get VM fact
+      vmware_vm_facts:
+        hostname: "{{ hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        show_attribute: yes
+        validate_certs: "{{ vm_vars.options.validate_certs }}"    
+      delegate_to: localhost
+      register: vmfacts
+
+    - name: Register VM Object (2.8)
+      set_fact:
+        vm_obj: '{{ vmfacts.virtual_machines | json_query(query) }}'
+      vars:
+        query: "[?guest_name=='{{ vm_vars.vminfo.vm_id }}']"
+    
+    - name: Shutdown any existing VM
+      vmware_guest:
+        hostname: "{{ hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        esxi_hostname: "{{ hostname }}"
+        name: "{{ vm_vars.vminfo.vm_id }}"
+        validate_certs: "{{ vm_vars.options.validate_certs }}"  
+        state: poweredoff
+      delegate_to: localhost
+      when: "vm_obj and vm_vars.options.delete_existing"
+
+    - name: Delete any existing VMs
+      vmware_guest:
+        hostname: "{{ hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        folder: "{{ vm_vars.paths.target_folder }}"
+        datastore: "{{ vm_vars.paths.target_datastore }}"
+        esxi_hostname: "{{ hostname }}"
+        name: "{{ vm_vars.vminfo.vm_id }}"
+        validate_certs: "{{ vm_vars.options.validate_certs }}"  
+        state: absent
+      delegate_to: localhost
+      when: "vm_obj and vm_vars.options.delete_existing"
+
+
+    - name: Create working DIR
+      file:
+        path: /tmp/workingdir
+        state: directory
+
+    - name: Mount ISO in loopfs
+      action: mount name=/tmp/workingdir/iso src="{{ vm_vars.paths.src_iso }}" opts=loop fstype=iso9660 state=mounted
+
+    - name: Copy ISO contents
+      copy: 
+        src: /tmp/workingdir/iso/
+        dest: /tmp/workingdir/isocontents/
+
+    - name: Unmount ISO
+      action: mount name=/tmp/workingdir/iso src="{{ vm_vars.paths.src_iso }}" opts=loop fstype=iso9660 state=absent
+    
+    - name: Edit ISOLINUX
+      replace:
+        dest: "/tmp/workingdir/isocontents/isolinux/txt.cfg"
+        regexp: 'append   initrd=/casper/initrd quiet  ---'
+        replace: 'append   initrd=/casper/initrd quiet --- autoinstall ds=nocloud;s=/cdrom/autoinstall/'
+
+    - name: Create directory to store user-data and meta-data
+      file:
+        path: "/tmp/workingdir/isocontents/autoinstall"
+        state: directory
+
+    - name: Make autoinstall config
+      copy:
+        dest: /tmp/workingdir/isocontents/autoinstall/user-data
+        src: ../data/user-data
+
+    - name: Create metadata file
+      file:
+        path: /tmp/workingdir/isocontents/autoinstall/meta-data
+        state: touch
+
+    - name: Create custom Ubuntu ISO
+      command: "xorrisofs -relaxed-filenames -J -R -o /tmp/workingdir/ubuntu64.iso -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table /tmp/workingdir/isocontents/"
+      args:
+        chdir: "/tmp/workingdir/isocontents/"
+
+    - name: Copy ISO
+      vsphere_copy:
+        hostname: "{{ hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        datacenter: ha-datacenter
+        datastore: "{{ vm_vars.paths.target_datastore }}"
+        path: "{{ vm_vars.paths.target_iso_filepath }}"
+        src: /tmp/workingdir/ubuntu64.iso
+        validate_certs: "{{ vm_vars.options.validate_certs }}"  
+      when: "vm_vars.options.copy_iso"
+
+
+       #Creates the VM, with attached ISO, a new disk and staging port groups/VLAN. Waits for VM tools to init, and an IP address to be assigned   
+    - name: Create VM
+      vmware_guest:
+        hostname: "{{ hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        folder: "{{ vm_vars.paths.target_folder }}"
+        datastore: "{{ vm_vars.paths.target_datastore }}"
+        guest_id: "{{ vm_vars.vminfo.guest_id }}"
+        name: "{{ vm_vars.vminfo.vm_id }}"
+        state: poweredon
+        customization: 
+          dns_suffix: "{{ vm_vars.vminfo.dns_suffix }}"
+          domain: "{{ vm_vars.vminfo.domain }}"
+          hostname: "{{ vm_vars.vminfo.hostname }}"
+        cdrom:
+          type: iso
+          iso_path: "[{{ vm_vars.paths.target_datastore }}] {{ vm_vars.paths.target_iso_filepath }}"
+        disk:
+         - size_gb: "{{ vm_vars.vminfo.disk_size_gb }}"
+           type: thin
+           datastore: "{{ vm_vars.paths.target_datastore }}"
+         - size_gb: "{{ vm_vars.vminfo.storage_size }}"
+           type: thin
+           datastore: "{{ vm_vars.paths.target_datastore }}"
+        esxi_hostname: "{{ hostname }}"
+        hardware:
+
+           memory_mb: "{{ vm_vars.vminfo.memory_mb }}"
+           num_cpus: "{{ vm_vars.vminfo.num_cpus }}"
+           num_cpu_cores_per_socket: "{{ vm_vars.vminfo.cores_per_cpu }}"
+        networks: "{{ vm_vars.vminfo.networks }}"
+        validate_certs: "{{ vm_vars.options.validate_certs }}"  
+
+        wait_for_ip_address: yes  
+      delegate_to: localhost
+      register: deploy_vm
+
+
+    - name: Get VM fact
+      vmware_vm_facts:
+        hostname: "{{ hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        validate_certs: "{{ vm_vars.options.validate_certs }}"      
+      delegate_to: localhost
+      register: vmfacts_post 
+      until: '{{ vmfacts_post.virtual_machines | json_query(query) != "" }}'
+      retries: 30
+      delay: 60
+      vars:
+        query: "[?guest_name=='{{ vm_vars.vminfo.vm_id }}'].ip_address"
+      

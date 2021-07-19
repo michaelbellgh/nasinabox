@@ -1,0 +1,7 @@
+network:
+  renderer: networkd
+  version: 2
+  ethernets: 
+    ens192:
+      dhcp4: yes
+      dhcp6: yes
