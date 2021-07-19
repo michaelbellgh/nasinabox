@@ -597,7 +597,6 @@
         - "/var/run/docker.sock:/var/run/docker.sock"
         - "/var/www/ssl/:/ssl"
         - "/home/docker/docker_data/traefik/traefik.yml:/traefik.yml"
-        - "/home/docker/docker_data/traefik/files.yml:/files.yml"
         - "/home/docker/docker_data/traefik/certs.yml:/certs.yml"
         - "/home/docker/docker_data/traefik/acme.json:/acme.json"
         - "/root/webca.crt:/webca.crt"
