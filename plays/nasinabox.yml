@@ -668,7 +668,7 @@
        - { regexp: 'base_url.+\=(.+)*', line: "base_url = /bazarr", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
        - { regexp: 'http_root.+\=(.+)*', line: "http_root = /library", path: "/home/docker/docker_data/lazylibrarian/config/config.ini"}
        - { regexp: '"BasePathOverride"(\s)*\:(\s)*.+', line: '  "BasePathOverride" : "/jackett",', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
-       - { regexp: '\"base\"\:\s+\"\/\",', '"base" : "/deluge"', path: "/home/docker/docker_data/deluge/config/web.conf"}
+       - { regexp: '\"base\"\:\s+\"\/\",', line: '"base" : "/deluge"', path: "/home/docker/docker_data/deluge/config/web.conf"}
 
 
 
