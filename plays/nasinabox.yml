@@ -177,7 +177,6 @@
       copy:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
-        force: yes
         remote_src: yes
       with_items:
        - { src: "/tmp/root.crt", dest: "/usr/local/share/ca-certificates/"}
