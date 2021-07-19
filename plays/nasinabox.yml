@@ -196,7 +196,6 @@
       become: yes
       with_items:
        - { src: "../data/traefik/traefik.yml", dest: "/home/docker/docker_data/traefik/traefik.yml", force: yes}
-       - { src: "../data/traefik/files.yml", dest: "/home/docker/docker_data/traefik/files.yml" , force: yes}
        - { src: "../data/traefik/certs.yml", dest: "/home/docker/docker_data/traefik/certs.yml" , force: yes}
 
        
