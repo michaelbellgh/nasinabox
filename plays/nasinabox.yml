@@ -64,7 +64,7 @@
         query: "[?guest_name=='{{ vm_vars.vminfo.vm_id }}'].ip_address" 
       delay: 60
       tags:
-       - "traefik"				  
+       - "traefik"                
     - name: Add hosts
       add_host:
         name: "{{ vm_obj[0].ip_address }}"
@@ -125,7 +125,7 @@
       with_items:
        - "/home/docker/docker_data/traefik/"
        - "/var/www/ssl"
-	     - "/home/docker/docker_data/jackett/config/Jackett/" 
+         - "/home/docker/docker_data/jackett/config/Jackett/" 
 
     - name: Set system settings
       lineinfile:
@@ -749,7 +749,7 @@
       fetch:
         src: /tmp/docker_data.zip
         dest: ../data/backup/docker_data.zip
-	    become: yes
+        become: yes
       when: backup is defined
 
     - name: Restart all containers
