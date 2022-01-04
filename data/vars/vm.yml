@@ -4,7 +4,7 @@ options: {copy_iso: false, delete_existing: true, validate_certs: false}
 
 api_key: "550b89c425784e9a8f32869e54df552a"
 
-paths: {src_iso: ../data/ubuntu64.iso, target_datastore: VMS,
+paths: {src_iso: data/ubuntu64.iso, target_datastore: VMS,
   target_folder: /, target_iso_filepath: ubuntu64-20.iso, target_storage_datastore: 'VMS'}
 
 vminfo:
