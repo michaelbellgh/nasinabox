@@ -58,43 +58,52 @@
       file:
         path: /tmp/workingdir
         state: directory
+      when: vm_vars.options.copy_iso
 
     - name: Mount ISO in loopfs
       action: mount name=/tmp/workingdir/iso src="{{ vm_vars.paths.src_iso }}" opts=loop fstype=iso9660 state=mounted
+      when: vm_vars.options.copy_iso
 
     - name: Copy ISO contents
       copy: 
         src: /tmp/workingdir/iso/
         dest: /tmp/workingdir/isocontents/
+      when: vm_vars.options.copy_iso
 
     - name: Unmount ISO
       action: mount name=/tmp/workingdir/iso src="{{ vm_vars.paths.src_iso }}" opts=loop fstype=iso9660 state=absent
+      when: vm_vars.options.copy_iso
     
     - name: Edit ISOLINUX
       replace:
         dest: "/tmp/workingdir/isocontents/isolinux/txt.cfg"
         regexp: 'append   initrd=/casper/initrd quiet  ---'
         replace: 'append   initrd=/casper/initrd quiet --- autoinstall ds=nocloud;s=/cdrom/autoinstall/'
+      when: vm_vars.options.copy_iso
 
     - name: Create directory to store user-data and meta-data
       file:
         path: "/tmp/workingdir/isocontents/autoinstall"
         state: directory
+      when: vm_vars.options.copy_iso
 
     - name: Make autoinstall config
       copy:
         dest: /tmp/workingdir/isocontents/autoinstall/user-data
         src: ../data/user-data
+      when: vm_vars.options.copy_iso
 
     - name: Create metadata file
       file:
         path: /tmp/workingdir/isocontents/autoinstall/meta-data
         state: touch
+      when: vm_vars.options.copy_iso
 
     - name: Create custom Ubuntu ISO
       command: "xorrisofs -relaxed-filenames -J -R -o /tmp/workingdir/ubuntu64.iso -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table /tmp/workingdir/isocontents/"
       args:
         chdir: "/tmp/workingdir/isocontents/"
+      when: vm_vars.options.copy_iso
 
     - name: Copy ISO
       vsphere_copy:

@@ -108,3 +108,4 @@ credentials.py
 *.iso
 docker_data.zip
 private_esxi
+*.bak
