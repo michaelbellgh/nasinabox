@@ -50,6 +50,21 @@
       delegate_to: localhost
       when: vm_obj
 
+    - name: Get VM fact
+      vmware_vm_info: 
+        hostname: "{{ hostname }}"
+        username: "{{ username }}"
+        password: "{{ password }}"
+        validate_certs: "{{ vm_vars.options.validate_certs }}"      
+      delegate_to: localhost
+      register: vmfacts
+      until: 'vmfacts.virtual_machines | json_query(query) != "" '
+      retries: 30
+      vars:
+        query: "[?guest_name=='{{ vm_vars.vminfo.vm_id }}'].ip_address" 
+      delay: 60
+      tags:
+       - "traefik"				  
     - name: Add hosts
       add_host:
         name: "{{ vm_obj[0].ip_address }}"
@@ -110,6 +125,7 @@
       with_items:
        - "/home/docker/docker_data/traefik/"
        - "/var/www/ssl"
+	   - "/home/docker/docker_data/jackett/config/Jackett/" 
 
 
 
@@ -177,6 +193,7 @@
       copy:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
+        force: yes
         remote_src: yes
       with_items:
        - { src: "/tmp/root.crt", dest: "/usr/local/share/ca-certificates/"}
@@ -195,9 +212,13 @@
       become: yes
       with_items:
        - { src: "../data/traefik/traefik.yml", dest: "/home/docker/docker_data/traefik/traefik.yml", force: yes}
+       - { src: "../data/traefik/files.yml", dest: "/home/docker/docker_data/traefik/files.yml" , force: yes}
        - { src: "../data/traefik/certs.yml", dest: "/home/docker/docker_data/traefik/certs.yml" , force: yes}
 
-       
+    - name: Set permissions for ACME
+      file:
+        mode: 0600
+        path: "/home/docker/docker_data/traefik/acme.json"   
     
     - name: GPG Key
       apt_key:
@@ -264,11 +285,8 @@
       shell: "update-ca-certificates"
 
     - name: create internal docker network
-      docker_network:
+      community.general.docker_network:
         name: docker
-        ipam_options:
-          subnet: "172.16.220.0/24"
-          iprange: "172.16.220.240/28"
 
     - name: Add groups
       group:
@@ -287,7 +305,7 @@
 
     - name: Restore backup
       copy:
-        src: ../data/docker_data.zip
+        src: ../data/backup/docker_data.zip
         dest: /home/docker/docker_data.zip
         force: yes
       when: restore is defined
@@ -347,7 +365,10 @@
           "traefik.enable": "true"
           "traefik.http.routers.deluge.rule": "PathPrefix(`/deluge`)"
           "traefik.http.routers.deluge.entrypoints": "https"
+          "traefik.http.routers.deluge.tls.certresolver": "letsencrypt"
           "traefik.http.services.deluge.loadbalancer.server.port": "8112"
+          "traefik.http.routers.deluge.middlewares": "deluge-stripprefix@docker"
+          "traefik.http.middlewares.deluge-stripprefix.stripprefix.prefixes": "/deluge"
         env: 
          TZ: "Australia/Melbourne"
          PUID: "1001"
@@ -492,7 +513,6 @@
           "traefik.http.routers.ombi.entrypoints": "https"
           "traefik.http.routers.ombi.tls.certresolver": "letsencrypt"
           "traefik.http.services.ombi.loadbalancer.server.port": "3579"
-          "traefik.http.middlewares.test-auth.basicauth.users": "Michael:C.LKbUVOogyRQ"
           "traefik.http.middlewares.protoheader.headers.customrequestheaders.X-Forwarded-Proto": "https"
         networks:
         - name: "docker"
@@ -594,6 +614,7 @@
         - "/var/run/docker.sock:/var/run/docker.sock"
         - "/var/www/ssl/:/ssl"
         - "/home/docker/docker_data/traefik/traefik.yml:/traefik.yml"
+        - "/home/docker/docker_data/traefik/files.yml:/files.yml"
         - "/home/docker/docker_data/traefik/certs.yml:/certs.yml"
         - "/home/docker/docker_data/traefik/acme.json:/acme.json"
         - "/root/webca.crt:/webca.crt"
@@ -621,7 +642,7 @@
 
     - name: Restore backup
       copy:
-        src: ../../data/docker_data.zip
+        src: ../data/backup/docker_data.zip
         dest: /home/docker/docker_data.zip
       when: restore is defined
 
@@ -656,6 +677,8 @@
         dest: /home/docker/docker_data/dashmachine/icons/
         force: yes
       
+
+
     - name: Set URL base on configs
       lineinfile:
         regexp: "{{ item.regexp }}"
@@ -668,7 +691,6 @@
        - { regexp: 'base_url.+\=(.+)*', line: "base_url = /bazarr", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
        - { regexp: 'http_root.+\=(.+)*', line: "http_root = /library", path: "/home/docker/docker_data/lazylibrarian/config/config.ini"}
        - { regexp: '"BasePathOverride"(\s)*\:(\s)*.+', line: '  "BasePathOverride" : "/jackett",', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
-       - { regexp: '\"base\"\:\s+\"\/\",', line: '"base" : "/deluge"', path: "/home/docker/docker_data/deluge/config/web.conf"}
 
 
 
@@ -729,7 +751,7 @@
       fetch:
         src: /tmp/docker_data.zip
         dest: ../data/backup/docker_data.zip
-        flat: yes
+	  become: yes
       when: backup is defined
 
     - name: Restart all containers

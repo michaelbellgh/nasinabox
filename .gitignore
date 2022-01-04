@@ -107,4 +107,4 @@ venv.bak/
 credentials.py
 *.iso
 docker_data.zip
-esxi_private
+private_esxi
