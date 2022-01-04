@@ -125,7 +125,7 @@
       with_items:
        - "/home/docker/docker_data/traefik/"
        - "/var/www/ssl"
-	   - "/home/docker/docker_data/jackett/config/Jackett/" 
+	     - "/home/docker/docker_data/jackett/config/Jackett/" 
 
 
 
