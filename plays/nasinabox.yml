@@ -127,8 +127,6 @@
        - "/var/www/ssl"
 	     - "/home/docker/docker_data/jackett/config/Jackett/" 
 
-
-
     - name: Set system settings
       lineinfile:
         path: "{{ item.path }}"
@@ -751,7 +749,7 @@
       fetch:
         src: /tmp/docker_data.zip
         dest: ../data/backup/docker_data.zip
-	  become: yes
+	    become: yes
       when: backup is defined
 
     - name: Restart all containers
