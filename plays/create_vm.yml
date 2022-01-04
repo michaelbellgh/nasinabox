@@ -61,7 +61,7 @@
       when: vm_vars.options.copy_iso
 
     - name: Mount ISO in loopfs
-      action: mount name=/tmp/workingdir/iso src="{{ vm_vars.paths.src_iso }}" opts=loop fstype=iso9660 state=mounted
+      action: mount -o loop "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso
       when: vm_vars.options.copy_iso
 
     - name: Copy ISO contents
