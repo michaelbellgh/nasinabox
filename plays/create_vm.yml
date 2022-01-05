@@ -60,8 +60,12 @@
         state: directory
       when: vm_vars.options.copy_iso
 
+    - name: Debug
+      debug:
+        msg: mount "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso -o loop
+
     - name: Mount ISO in loopfs
-      action: mount "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso -o loop 
+      cmd: mount "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso -o loop 
       when: vm_vars.options.copy_iso
 
     - name: Copy ISO contents
