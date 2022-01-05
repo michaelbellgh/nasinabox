@@ -60,12 +60,13 @@
         state: directory
       when: vm_vars.options.copy_iso
 
-    - name: Debug
-      debug:
-        msg: 'mount "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso -o loop'
 
     - name: Mount ISO in loopfs
-      cmd: mount "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso -o loop 
+      mount:
+        src: "{{ vm_vars.paths.src_iso }}"
+        path: /tmp/workingdir/iso
+        opts: loop
+        state: mounted 
       when: vm_vars.options.copy_iso
 
     - name: Copy ISO contents
@@ -75,7 +76,9 @@
       when: vm_vars.options.copy_iso
 
     - name: Unmount ISO
-      action: mount name=/tmp/workingdir/iso src="{{ vm_vars.paths.src_iso }}" opts=loop fstype=iso9660 state=absent
+      mount:
+        path: /tmp/workingdir/iso
+        state: unmounted
       when: vm_vars.options.copy_iso
     
     - name: Edit ISOLINUX
