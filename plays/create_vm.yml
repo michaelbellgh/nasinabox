@@ -73,6 +73,7 @@
       copy: 
         src: /tmp/workingdir/iso/
         dest: /tmp/workingdir/isocontents/
+        fstype: iso9660
       when: vm_vars.options.copy_iso
 
     - name: Unmount ISO
