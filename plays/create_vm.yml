@@ -67,13 +67,13 @@
         path: /tmp/workingdir/iso
         opts: loop
         state: mounted 
+        fstype: iso9660
       when: vm_vars.options.copy_iso
 
     - name: Copy ISO contents
       copy: 
         src: /tmp/workingdir/iso/
-        dest: /tmp/workingdir/isocontents/
-        fstype: iso9660
+        dest: /tmp/workingdir/isocontents/\
       when: vm_vars.options.copy_iso
 
     - name: Unmount ISO
