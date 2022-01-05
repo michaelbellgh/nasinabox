@@ -56,12 +56,12 @@
 
     - name: Create working DIR
       file:
-        path: /tmp/workingdir
+        path: /tmp/workingdir/iso
         state: directory
       when: vm_vars.options.copy_iso
 
     - name: Mount ISO in loopfs
-      action: mount -o loop "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso
+      action: mount "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso -o loop 
       when: vm_vars.options.copy_iso
 
     - name: Copy ISO contents
