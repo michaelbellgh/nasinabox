@@ -62,7 +62,7 @@
 
     - name: Debug
       debug:
-        msg: mount "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso -o loop
+        msg: 'mount "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso -o loop'
 
     - name: Mount ISO in loopfs
       cmd: mount "{{ vm_vars.paths.src_iso }}" /tmp/workingdir/iso -o loop 
