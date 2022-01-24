@@ -1,24 +1,24 @@
-creds: {guest_pass: nas, guest_user: nas}
+creds: {guest_pass: nasinabox, guest_user: nasinabox}
 
 options: {copy_iso: false, delete_existing: true, validate_certs: false}
 
 api_key: "550b89c425784e9a8f32869e54df552a"
 
 paths: {src_iso: ../data/ubuntu64.iso, target_datastore: VMS,
-  target_folder: /, target_iso_filepath: ubuntu64-20.iso, target_storage_datastore: 'VMS'}
+  target_folder: /, target_iso_filepath: ubuntu64.iso, target_storage_datastore: 'VMS'}
 
 vminfo:
-   vm_id: nasinabox
+   vm_id: nasinabox-wodonga
    guest_user: nasinabox
    guest_pass: nasinabox
    cores_per_cpu: '4'
    disk_size_gb: '100'
-   storage_size: '100'
-   dns_suffix: nas.local
-   domain: nas.local
+   storage_size: '1000'
+   dns_suffix: nasinabox-wodonga.local
+   domain: nasinabox-wodonga.local
    guest_id: ubuntu64guest
-   hostname: nas
-   memory_mb: '4096'
+   hostname: nasinabox-wodonga
+   memory_mb: '8192'
    networks:
    - {name: Trust}
    staging_networks: 
