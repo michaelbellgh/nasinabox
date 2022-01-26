@@ -1,5 +1,5 @@
 ---
-        
+ #TODO: Set up permissions, fix deluge, bazarr,jackett
  - name: Configure NAS (implementation stage)
    gather_facts: false
    hosts: nas
@@ -11,34 +11,13 @@
       include_vars:
         file: ../data/vars/vm.yml
         name: vm_vars
-      tags:
-       - "traefik"
-
-    - name: Set IP Address fact
-      set_fact: 
-        ip_base: "{{ hostvars[inventory_hostname] }}"
-
-    - name: Set IP
-      set_fact:
-        ip: "{{ ip_base.inventory_hostname }}"
 
     - name: Ignore host key on first run
       set_fact:
         ansible_ssh_extra_args: '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
-      tags:
-       - "traefik"
-        
 
-    
-    - name: Wipe
-      file:
-        path: /home/docker/docker_data/
-        state: absent
-      when: wipe is defined
-
-    - name: Start docker containers
-      shell: "docker start $(docker ps -a -q)"
-      when: wipe is defined
+    - name: Re-acquire facts
+      setup:
    
     - name: Make required host directories
       file:
@@ -64,9 +43,11 @@
        - { path: "/etc/sysctl.conf", line: "net.ipv6.conf.all.disable_ipv6 = 1"}
        - { path: "/etc/sysctl.conf", line: "net.ipv6.conf.default.disable_ipv6 = 1"}
        - { path: "/etc/sysctl.conf", line: "net.ipv6.conf.lo.disable_ipv6 = 1"}
+      register: set_system_settings
     
     - name: Set system settings (apply)
       shell: "sysctl --system"
+      when: set_system_settings.changed
     
 
     - name: create root key
@@ -138,20 +119,15 @@
       file:
         mode: 0600
         path: "/home/docker/docker_data/traefik/acme.json"
-        state: touch
     
     - name: GPG Key
       apt_key:
         url: https://download.docker.com/linux/ubuntu/gpg
         state: present
 
-    - name: Get lsb_release
-      shell: "lsb_release -cs"
-      register: distro_var
-
     - name: Add Docker APT repository
       apt_repository:
-        repo: deb https://download.docker.com/linux/ubuntu {{ distro_var.stdout }} stable
+        repo: deb https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
 
     - name: Upgrade packages and distro
       apt:
@@ -159,7 +135,6 @@
         upgrade: full
         state: fixed
       become: yes
-      ignore_errors: yes
 
 
     - name: Install additional packages
@@ -181,7 +156,6 @@
           - unattended-upgrades
         state: present
       become: yes
-      ignore_errors: yes
 
     - name: Enable unattended-upgrades
       lineinfile:
@@ -220,6 +194,7 @@
         groups:
          - media
         state: present
+        uid: 1001
         shell: /bin/bash
         createhome: yes
 
@@ -275,6 +250,19 @@
       with_items: 
        - { path: "/mnt/Storage", src: "/dev/sdb1"}
       when: storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
+
+    - name: Set permissions on Storage
+      file:
+        path: /mnt/Storage/
+        mode: '644'
+      become: yes
+      when: storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
+
+    - name: Set permissions on Docker Data
+      file:
+        path: /home/docker/docker_data
+        mode: '644'
+      become: yes
 
 
     - name: Start Deluge
@@ -542,7 +530,6 @@
       tags: 
       - "traefik"
 
-
     - name: Set permissions (mode)
       file:
         path: "/mnt/"
@@ -555,8 +542,7 @@
 
     - name: Stop all docker containers
       shell: "docker kill $(docker ps -q)"
-      tags:
-       - "traefik"
+
 
 
     - name: Restore backup
@@ -598,10 +584,48 @@
       
 
 
-    - name: Set URL base on configs
-      lineinfile:
+    - name: Check if deluge web.conf is missing
+      stat: 
+        path: /home/docker/docker_data/deluge/config/web.conf
+      register: deluge_web_conf
+
+    - name: Stop Deluge if web.conf is missing
+      docker_container:
+        name: deluge
+        state: stopped
+      become: yes
+      when: not deluge_web_conf.stat.exists
+
+
+    - name: Set other app parameters
+      replace:
         regexp: "{{ item.regexp }}"
-        line: "{{ item.line }}"
+        replace: "{{ item.line }}"
+        path: "{{ item.path }}"
+      with_items:
+       - { regexp: '"/root/Downloads"', line: '"/downloads"', path: "/home/docker/docker_data/deluge/config/core.conf"}
+      when: not deluge_web_conf.stat.exists
+      
+
+    - name: Start deluge
+      docker_container:
+        name: deluge
+        state: started
+        restart: yes
+      become: yes
+      when: not deluge_web_conf.stat.exists
+
+    - name: Wait for deluge web.conf generation
+      wait_for:
+        path: /home/docker/docker_data/config/web.conf
+        state: present
+      when: not deluge_web_conf.stat.exists
+      
+
+    - name: Set URL base on configs
+      replace:
+        regexp: "{{ item.regexp }}"
+        replace: "{{ item.line }}"
         path: "{{ item.path }}"
       with_items:
        - { regexp: '\<UrlBase\>(.+)*\<\/UrlBase\>', line: "  <UrlBase>/lidarr</UrlBase>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
@@ -609,15 +633,19 @@
        - { regexp: '\<UrlBase\>(.+)*\<\/UrlBase\>', line: "  <UrlBase>/radarr</UrlBase>", path: "/home/docker/docker_data/radarr/config/config.xml"}
        - { regexp: 'base_url.+\=(.+)*', line: "base_url = /bazarr", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
        - { regexp: 'http_root.+\=(.+)*', line: "http_root = /library", path: "/home/docker/docker_data/lazylibrarian/config/config.ini"}
-       - { regexp: '"BasePathOverride"(\s)*\:(\s)*.+', line: '  "BasePathOverride" : "/jackett",', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
+       - { regexp: '"BasePathOverride"(\s+)?\:\s+[^,\r\n]+', line: '"BasePathOverride": "/jackett"', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
+       - { regexp: '"base":\s+".+"', line: '  "base" : "/deluge",', path: "/home/docker/docker_data/deluge/config/web.conf"}
+      register: url_base_output
+
+
 
 
 
     - name: Set API Key to single key
-      lineinfile:
+      replace:
         regexp: "{{ item.regexp }}"
-        line: "{{ item.line }}"
         path: "{{ item.path }}"
+        replace: "{{ item.line }}"
       with_items:
         - { regexp: '\<ApiKey\>(.+)*\<\/ApiKey\>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
         - { regexp: '\<ApiKey\>(.+)*\<\/ApiKey\>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
@@ -625,15 +653,34 @@
         - { regexp: 'apikey[\s\=]*[a-zA-Z0-9]*\n', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
         - { regexp: 'api_key[\s\=]*[a-zA-Z0-9]*\n', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/lazylibrarian/config/config.ini"}
         - { regexp: 'APIKey"(\s)*\:(\s)*"[a-zA-Z0-9]*', line: '  "APIKey" : "{{ vm_vars.api_key }}",', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
+      register: api_change_output
+
+
+    - name: Pause
+      pause:
+ 
+    - name: Restart deluge, allow web.conf generation
+      community.docker.docker_container:
+        name: deluge
+        state: started
+        restart: yes
+      become: yes
+      when: not deluge_web_conf.stat.exists
+
+    - name: Restart certain containers if containers API, URL base or other params have changed
+      docker_container:
+        name: "{{ item }}"
+        state: started
+        restart: yes
+      with_items: ["lidarr", "sonarr", "radarr", "bazarr", "lazylibrarian", "jackett", "deluge"]
+      when: url_base_output.changed or api_change_output.changed
 
     - name: Start docker containers
       shell: "docker start $(docker ps -a -q)"
-      tags:
-       - "traefik"
 
     - name: Wait for return code
       uri:
-        url: "https://{{ ip }}:443/{{ item }}"
+        url: "https://{{ ansible_default_ipv4.address }}:443/{{ item }}"
         status_code: 200
         validate_certs: false
       register: result
@@ -646,7 +693,7 @@
        - "radarr"
 
     - name: Run configurator
-      shell: "python3 configure_apps.py {{ ip }} 443 {{ vm_vars.api_key }}"
+      command: "python3 configure_apps.py {{ ansible_default_ipv4.address }} 443 {{ vm_vars.api_key }}"
       delegate_to: localhost
       become: no
 
