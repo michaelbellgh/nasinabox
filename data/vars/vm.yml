@@ -4,27 +4,22 @@ options: {copy_iso: false, delete_existing: true, validate_certs: false}
 
 api_key: "550b89c425784e9a8f32869e54df552a"
 
-nas: { open_subtitles_username: "micshadow", open_subtitles_password: "mGpc*7jU4FCQ5bZrKwbpJpZVC"}
 
 paths: {src_iso: ../data/ubuntu64.iso, target_datastore: VMS,
   target_folder: /, target_iso_filepath: ubuntu64.iso, target_storage_datastore: 'VMS'}
 
 vminfo:
-   vm_id: nasinabox-wodonga
+   vm_id: nasinabox-myinstance
    guest_user: nasinabox
    guest_pass: nasinabox
    cores_per_cpu: '4'
    disk_size_gb: '100'
    storage_size: '1000'
-   dns_suffix: nasinabox-wodonga.local
-   domain: nasinabox-wodonga.local
+   dns_suffix: nasinabox-myinstance.local
+   domain: nasinabox-myinstance.local
    guest_id: ubuntu64guest
-   hostname: nasinabox-wodonga
+   hostname: nasinabox-myinstance
    memory_mb: '8192'
-   networks:
-   - {name: Trust}
-   staging_networks: 
-   - {name: Trust}
    num_cpus: '4'
    service_user: "media"
 
