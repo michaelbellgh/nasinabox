@@ -23,10 +23,11 @@
       file:
         path: "{{ item }}"
         state: directory
+        mode: '0644'
       with_items:
        - "/home/docker/docker_data/traefik/"
        - "/var/www/ssl"
-       - "/home/docker/docker_data/jackett/config/Jackett/" 
+       - "/home/docker/docker_data/jackett/config/Jackett/"
 
     - name: Set system settings
       lineinfile:
@@ -46,7 +47,7 @@
       register: set_system_settings
     
     - name: Set system settings (apply)
-      shell: "sysctl --system"
+      command: "sysctl --system"
       when: set_system_settings.changed
     
 
@@ -61,6 +62,7 @@
         privatekey_path: "{{ root_key.filename }}"
         common_name: "nasinabox"
       register: root_csr
+      when: root_key.changed
 
     - name: sign the root CSR
       openssl_certificate:
@@ -69,11 +71,13 @@
         privatekey_path: "{{ root_key.filename }}"
         provider: selfsigned
       register: root_crt
+      when: root_key.changed
 
     - name: Create Web CA key
       openssl_privatekey:
         path: /tmp/webca.pem
       register: webca_key
+      when: root_key.changed
 
     - name: Create webca CSR
       openssl_csr:
@@ -81,6 +85,7 @@
         privatekey_path: "{{ root_key.filename }}"
         common_name: "*.{{ vm_vars.vminfo.hostname }}.local"
       register: webca_csr
+      when: root_key.changed
 
     - name: sign the webca CSR
       openssl_certificate:
@@ -89,6 +94,8 @@
         privatekey_path: "{{ webca_key.filename }}"
         provider: selfsigned
       register: webca_crt
+      when: root_key.changed
+
 
     - name: Copy all certs
       copy:
@@ -101,9 +108,11 @@
        - { src: "/tmp/webca.crt", dest: "/usr/local/share/ca-certificates/"}
        - { src: "/tmp/webca.crt", dest: "/root/webca.crt"}
        - { src: "/tmp/webca.pem", dest: "/root/webca.pem"}
+      when: root_key.changed
 
     - name: Update CA store
       shell: update-ca-certificates
+      when: root_key.changed
 
     - name: Copy all required pre install files
       copy:
@@ -174,9 +183,6 @@
           - pip
           - docker-py
         executable: "/usr/bin/pip3"
-
-    - name: Update CA's
-      shell: "update-ca-certificates"
 
     - name: create internal docker network
       community.general.docker_network:
@@ -291,6 +297,7 @@
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
         purge_networks: yes
+      register: docker_deluge
 
     - name: Start plex
       docker_container:
@@ -307,6 +314,7 @@
         - /mnt/Storage/TV:/tv
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
+      register: docker_plex
 
     - name: Start jackett
       docker_container:
@@ -330,6 +338,7 @@
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
         purge_networks: yes
+      register: docker_jackett
 
     - name: Start lidarr
       docker_container:
@@ -355,6 +364,7 @@
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         purge_networks: yes
+      register: docker_lidarr
 
     - name: Start radarr
       docker_container:
@@ -380,6 +390,7 @@
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         purge_networks: yes
+      register: docker_radarr
 
     - name: Start sonarr
       docker_container:
@@ -405,6 +416,7 @@
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
         purge_networks: yes
+      register: docker_sonarr
 
     - name: Start ombi
       docker_container:
@@ -430,6 +442,7 @@
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         purge_networks: yes
+      register: docker_ombi
 
 
     - name: Start bazarr
@@ -457,6 +470,7 @@
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         purge_networks: yes
+      register: docker_bazarr
 
     - name: Start lazylibrarian
       docker_container:
@@ -482,6 +496,7 @@
         - name: "docker"
           links: ["jackett", "deluge"]
         purge_networks: yes
+      register: docker_lazylibrarian
 
     - name: Start Dashmachine
       docker_container:
@@ -502,6 +517,7 @@
         - name: docker
         restart_policy: unless-stopped
         purge_networks: yes
+      register: docker_dashmachine
 
 
 
@@ -509,12 +525,17 @@
     - name: Run traefik
       docker_container:
         name: traefik
-        recreate: true
+        recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_lazylibrarian.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
         labels: 
           "traefik.enable": "true"
           "traefik.http.routers.api.rule": "PathPrefix(`/traefik`)"
           "traefik.http.routers.api.entrypoints": "https"
           "traefik.http.routers.api.service": "dashboard@internal"
+          "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme": "https" 
+          "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent": "true"
+          "traefik.http.routers.redirs.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.redirs.entrypoints": "http"
+          "traefik.http.routers.redirs.middlewares": "redirect-to-https"
         image: "traefik:latest"
         network_mode: host
         restart_policy: unless-stopped
@@ -542,23 +563,7 @@
 
     - name: Stop all docker containers
       shell: "docker kill $(docker ps -q)"
-
-
-
-    - name: Restore backup
-      copy:
-        src: ../data/backup/docker_data.zip
-        dest: /home/docker/docker_data.zip
-      when: restore is defined
-
-    - name: Unzip backup
-      unarchive:
-        remote_src: yes
-        src: /home/docker/docker_data.zip
-        dest: /
-      when: restore is defined
     
-
     - name: Copy Indexers zip
       copy:
         src: ../data/jackett/Indexers.zip
@@ -575,12 +580,21 @@
       copy:
         src: ../data/dashmachine/user_data/config.ini
         dest: /home/docker/docker_data/dashmachine/config.ini
+      register: dashmachine_config
+    
+    - name: Replace dashmachine locations
+      replace:
+        regexp: "nas.local"
+        replace: "{{ ansible_hostname }}"
+        path: "/home/docker/docker_data/dashmachine/config.ini"
+      register: dashmachine_locations
 
     - name: Copy dashmachine icons
       copy:
         src: ../data/dashmachine/user_data/icons/
         dest: /home/docker/docker_data/dashmachine/icons/
         force: yes
+      when: dashmachine_config.changed and dashmachine_locations.changed
       
 
 
@@ -604,6 +618,7 @@
         path: "{{ item.path }}"
       with_items:
        - { regexp: '"/root/Downloads"', line: '"/downloads"', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '"enabled_plugins"(\s)?:\s+\[([^\]]+)\]', line: '"enabled_plugins": ["Label", "Execute"]', path: "/home/docker/docker_data/deluge/config/core.conf"}
       when: not deluge_web_conf.stat.exists
       
 
@@ -628,16 +643,14 @@
         replace: "{{ item.line }}"
         path: "{{ item.path }}"
       with_items:
-       - { regexp: '\<UrlBase\>(.+)*\<\/UrlBase\>', line: "  <UrlBase>/lidarr</UrlBase>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
-       - { regexp: '\<UrlBase\>(.+)*\<\/UrlBase\>', line: "  <UrlBase>/sonarr</UrlBase>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
-       - { regexp: '\<UrlBase\>(.+)*\<\/UrlBase\>', line: "  <UrlBase>/radarr</UrlBase>", path: "/home/docker/docker_data/radarr/config/config.xml"}
+       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/lidarr</UrlBase>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
+       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/sonarr</UrlBase>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
+       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/radarr</UrlBase>", path: "/home/docker/docker_data/radarr/config/config.xml"}
        - { regexp: 'base_url.+\=(.+)*', line: "base_url = /bazarr", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
        - { regexp: 'http_root.+\=(.+)*', line: "http_root = /library", path: "/home/docker/docker_data/lazylibrarian/config/config.ini"}
        - { regexp: '"BasePathOverride"(\s+)?\:\s+[^,\r\n]+', line: '"BasePathOverride": "/jackett"', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
-       - { regexp: '"base":\s+".+"', line: '  "base" : "/deluge",', path: "/home/docker/docker_data/deluge/config/web.conf"}
+       - { regexp: '"base":\s+".+"', line: '  "base" : "/deluge"', path: "/home/docker/docker_data/deluge/config/web.conf"}
       register: url_base_output
-
-
 
 
 
@@ -647,17 +660,15 @@
         path: "{{ item.path }}"
         replace: "{{ item.line }}"
       with_items:
-        - { regexp: '\<ApiKey\>(.+)*\<\/ApiKey\>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
-        - { regexp: '\<ApiKey\>(.+)*\<\/ApiKey\>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
-        - { regexp: '\<ApiKey\>(.+)*\<\/ApiKey\>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/radarr/config/config.xml"}
+        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
+        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
+        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/radarr/config/config.xml"}
         - { regexp: 'apikey[\s\=]*[a-zA-Z0-9]*\n', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
         - { regexp: 'api_key[\s\=]*[a-zA-Z0-9]*\n', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/lazylibrarian/config/config.ini"}
-        - { regexp: 'APIKey"(\s)*\:(\s)*"[a-zA-Z0-9]*', line: '  "APIKey" : "{{ vm_vars.api_key }}",', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
+        - { regexp: '"APIKey"\s*\:\s*"[a-zA-Z0-9]*"', line: '"APIKey" : "{{ vm_vars.api_key }}"', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
       register: api_change_output
 
 
-    - name: Pause
-      pause:
  
     - name: Restart deluge, allow web.conf generation
       community.docker.docker_container:
@@ -674,6 +685,7 @@
         restart: yes
       with_items: ["lidarr", "sonarr", "radarr", "bazarr", "lazylibrarian", "jackett", "deluge"]
       when: url_base_output.changed or api_change_output.changed
+    
 
     - name: Start docker containers
       shell: "docker start $(docker ps -a -q)"
@@ -692,11 +704,25 @@
        - "lidarr"
        - "radarr"
 
-    - name: Run configurator
-      command: "python3 configure_apps.py {{ ansible_default_ipv4.address }} 443 {{ vm_vars.api_key }}"
-      delegate_to: localhost
-      become: no
 
+    - name: Run configurator (with opensubtitles support)
+      command: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p 443 -a {{ vm_vars.api_key }} --open-subtitles-username {{ vm_vars.nas.open_subtitles_username }} --open-subtitles-password {{ vm_vars.nas.open_subtitles_password }}"
+      delegate_to: localhost
+      args:
+        chdir: scripts
+      become: no
+      register: configurator_w_support
+      when: vm_vars.nas.open_subtitles_username is defined and vm_vars.nas.open_subtitles_password is defined
+      
+
+    - name: Run configurator
+      command: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p 443 -a {{ vm_vars.api_key }} {{ '--open-subtitles-username' vm_vars.nas.open_subtitles_username if vm_vars.nas.open_subtitles_username is defined }}"
+      delegate_to: localhost
+      args:
+        chdir: scripts
+      become: no
+      register: configurator
+      when: "configurator_w_support is not defined"
 
     - name: Enable services
       systemd:

@@ -1,4 +1,45 @@
-import requests, json, sys
+
+import enum
+from operator import truediv
+from ssl import VerifyFlags
+import threading
+import requests, json, argparse
+
+
+import logging
+import contextlib
+try:
+    from http.client import HTTPConnection # py3
+except ImportError:
+    from httplib import HTTPConnection # py2
+
+def debug_requests_on():
+    '''Switches on logging of the requests module.'''
+    HTTPConnection.debuglevel = 1
+
+    logging.basicConfig()
+    logging.getLogger().setLevel(logging.DEBUG)
+    requests_log = logging.getLogger("requests.packages.urllib3")
+    requests_log.setLevel(logging.DEBUG)
+    requests_log.propagate = True
+
+def debug_requests_off():
+    '''Switches off logging of the requests module, might be some side-effects'''
+    HTTPConnection.debuglevel = 0
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.WARNING)
+    root_logger.handlers = []
+    requests_log = logging.getLogger("requests.packages.urllib3")
+    requests_log.setLevel(logging.WARNING)
+    requests_log.propagate = False
+
+@contextlib.contextmanager
+def debug_requests():
+    '''Use with 'with'!'''
+    debug_requests_on()
+    yield
+    debug_requests_off()
 
 def api_request_darr(hostname: str, port: int, path: str, api_key: str, json: str, scheme: str="https", method: str="POST", verify_certificate=False):
     uri = scheme + "://" + hostname + ":" + str(port) + path + "?apikey=" + api_key
@@ -121,6 +162,11 @@ def ombi_upload_sonarr_profiles(ombi: ombi_instance, sonarr_hostname: str, sonar
     print(response.text)
 
 
+
+
+
+
+
 ### *darr Methods
 
 class darr_instance:
@@ -163,15 +209,169 @@ def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: s
 def darr_add_root_folder(darr: darr_instance, folder: str):
     api_request_darr(darr.hostname, darr.port, darr.path + "/api/v3/rootFolder", darr.api_key, {"path" : folder})
 
-def configure_all_apps(hostname: str, port: int, apikey: str):
 
-    sonarr = darr_instance(hostname, port, "/sonarr", True, True, apikey, "https")
-    lidarr = darr_instance(hostname, port, "/lidarr", True, True, apikey, "https")
-    radarr = darr_instance(hostname, port, "/radarr", True, True, apikey, "https")
+def bazarr_configure_english_providers(darr: darr_instance, open_subtitles_username: str=None, open_subtitles_password: str=None, validate_certs=False):
+    providers = ["betaseries", "opensubtitles", "opensubtitlescom", "subscenter", "supersubtitles", "tvsubtitles", "yifysubtitles"]
+    body = []
 
-    add_torznab_indexer(hostname, port, "/sonarr", "http://jackett:9117", "Jackett", "/api/v2.0/indexers/all/results/torznab", [5030, 5040], apikey, info_link="https://wiki.servarr.com/Sonarr_Supported_torznab")
-    add_torznab_indexer(hostname, port, "/lidarr", "http://jackett:9117", "Jackett", "/api/v2.0/indexers/all/results/torznab", [3000,3010,3020,3030,3040], apikey, custom_fields={"earlyReleaseLimit" : None, "seedCriteria.discographySeedTime" : None}, indexer_api_path="/api/v1/indexer") 
-    add_torznab_indexer(hostname, port, "/radarr", "http://jackett:9117", "Jackett", "/api/v2.0/indexers/all/results/torznab", [2000,2010,2020,2030,2040,2050,2060], apikey, custom_fields={"multiLanguages" : [], "removeYear" : False, "requiredFlags" : []}) 
+    for provider in providers:
+        body.append(("settings-general-enabled_providers", provider))
+
+    if open_subtitles_username and open_subtitles_password:
+        body.append(("settings-opensubtitles-username", open_subtitles_username))
+        body.append(("settings-opensubtitles-password", open_subtitles_password))
+        body.append(("settings-opensubtitlescom-username", open_subtitles_username))
+        body.append(("settings-opensubtitlescom-password", open_subtitles_password))
+        body.append(("settings-opensubtitles-ssl", "false"))
+    
+    response = requests.post(darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/system/settings?apikey=" + darr.api_key, data=body, verify=validate_certs)
+    return response.status_code == 204
+
+def bazarr_configure_sonarr_provider(darr: darr_instance, sonarr_instance: darr_instance, validate_certs=False):
+    body = { \
+        "settings-general-use_sonarr" : (None, True),
+        "settings-sonarr-ip" : (None, "sonarr"),
+        "settings-sonarr-base_url" : (None, sonarr_instance.path),
+        "settings-sonarr-apikey" : (None, sonarr_instance.api_key)
+
+    }
+    headers = { \
+        "x-api-key" : darr.api_key,
+    }
+    url = darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/system/settings"
+    response = requests.post(url, files=body, headers=headers, verify=validate_certs)
+    return response.status_code == 200
+
+def bazarr_configure_radarr_provider(darr: darr_instance, radarr_instance: darr_instance, validate_certs=False):
+    body = { \
+        "settings-general-use_radarr" : (None, True),
+        "settings-radarr-ip" : (None, "radarr"),
+        "settings-radarr-base_url" : (None, radarr_instance.path),
+        "settings-radarr-apikey" : (None, radarr_instance.api_key)
+
+    }
+    headers = { \
+        "x-api-key" : darr.api_key,
+    }
+    url = darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/system/settings"
+    response = requests.post(url, files=body, headers=headers, verify=validate_certs)
+    return response.status_code == 200
+
+def bazarr_configure_lang_profile(darr: darr_instance, language="en", validate_certs=False):
+    with debug_requests():
+        language_profiles = json.dumps([{ \
+            "profileId": 1,
+            "name": language,
+            "items": [ \
+                {
+                    "id": 1,
+                    "language": language,
+                    "audio_exclude": False,
+                    "hi": False,
+                    "forced": False
+                }
+            ],
+            "cutoff": 65535,
+            "mustContain": [],
+            "mustNotContain": []
+        }])
+
+        body = { \
+            "settings-general-serie_default_enabled" : (None,True),
+            "settings-general-movie_default_enabled" : (None,True),
+            "settings-general-serie_default_profile" : (None,1),
+            "settings-general-movie_default_profile" :(None,1),
+            "languages-enabled" : (None,language),
+            "languages-profiles" : (None, language_profiles)
+        }
+
+        headers = {"x-api-key": darr.api_key}
+
+        url = darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/system/settings"
+        response = requests.post(url, files=body, headers=headers, verify=validate_certs)
+        return response.status_code == 204
+
+
+def make_post_request(url, json_body, headers, verify):
+    resp = requests.post(url, json=json_body, headers=headers, verify=verify)
+
+def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key, jackett_scheme, jackett_hostname: str, jackett_port: int, jackett_path, int_jackett_scheme, int_jackett_hostname, int_jackett_port, int_jackett_path, validate_certs=False, categories=[5030, 5040]):
+    url = jackett_scheme + "://" + jackett_hostname + ":" + str(jackett_port) + jackett_path + "/api/v2.0/indexers/?configured=true"
+    response_json = requests.get(url, verify=validate_certs).json()
+    
+    current_darr_indexers = requests.get(f"{darr.scheme}://{darr.hostname}:" + str(darr.port) + darr.path + "/api/v3/indexer", headers={"x-api-key" : darr.api_key}, verify=validate_certs).json()
+    darr_indexers = [x["name"] for x in current_darr_indexers]
+
+    threads = []
+
+    for indexer in response_json:
+        indexer_dict = {}
+        indexer_dict["id"] = indexer["id"]
+
+        if indexer_dict["id"] in darr_indexers:
+            continue
+        cap_matches = [x["ID"] for x in indexer["caps"] if int(x["ID"]) in categories]
+        if len(cap_matches) < 1:
+            continue
+
+        indexer_dict["torznab"] = int_jackett_scheme + "://" + int_jackett_hostname + ":" + str(int_jackett_port) + int_jackett_path + "/api/v2.0/indexers/" + indexer_dict["id"] + "/results/torznab/"
+
+        fields = [ \
+            {"name": "baseUrl", "value": indexer_dict["torznab"]},
+            {"name": "apiPath", "value": "/api"},
+            {"name": "apiKey", "value": jackett_api_key},
+            {"name": "categories", "value": categories},
+            {"name": "animeCategories", "value": [5070]},
+            {"name": "additionalParameters"},
+            {"name": "minimumSeeders", "value": 1},
+            {"name": "seedCriteria.seedRatio"},
+            {"name": "seedCriteria.seedTime"},
+            {"name": "seedCriteria.seasonPackSeedTime"}
+        ]
+
+        body = { \
+            "configContract" : "TorznabSettings",
+            "enableAutomaticSearch": True,
+            "enableInteractiveSearch": True,
+            "enableRss": True,
+            "fields": fields,
+            "implementation": "Torznab",
+            "implementationName": "Torznab",
+            "infoLink": "https://wiki.servarr.com/sonarr/supported#torznab",
+            "name": indexer_dict["id"],
+            "priority": 25,
+            "protocol": "torrent",
+            "supportsRss": True,
+            "supportsSearch": True,
+            "tags": []
+        }
+
+        url = darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/v3/indexer?"
+
+        th = threading.Thread(target=make_post_request, args=(url, body, {"x-api-key" : darr.api_key}, validate_certs,))
+        threads.append(th)
+        th.start()
+
+    for thread in threads:
+        thread.join()
+
+
+
+
+
+        
+
+
+#torznab_url = jackett_scheme + "://" + jackett_hostname + ":" + str(jackett_port) + "/jackett/api/v2.0/indexers/{id}/results/torznab".format(id)
+
+def configure_all_apps(vars):
+
+
+    sonarr = darr_instance(vars['hostname'], vars['port'], "/sonarr", True, True, vars['apikey'], "https")
+    lidarr = darr_instance(vars['hostname'], vars['port'], "/lidarr", True, True, vars['apikey'], "https")
+    radarr = darr_instance(vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], "https")
+    bazarr = darr_instance(vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], "https")
+
     
     darr_add_download_client(sonarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
     darr_add_download_client(lidarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
@@ -181,9 +381,27 @@ def configure_all_apps(hostname: str, port: int, apikey: str):
     darr_add_root_folder(lidarr, "/music/")
     darr_add_root_folder(radarr, "/movies/")
 
+    bazarr_configure_english_providers(bazarr, vars['open_subtitles_username'], vars['open_subtitles_password'])
+    bazarr_configure_sonarr_provider(bazarr, sonarr)
+    bazarr_configure_radarr_provider(bazarr, radarr)
+    bazarr_configure_lang_profile(bazarr)
 
-    
+    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040])
+    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060])
 
 
 
-configure_all_apps(sys.argv[1], int(sys.argv[2]), sys.argv[3])
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--hostname", required=True, help="IP Address/Hostname of the *arr clients")
+    parser.add_argument("-p", "--port", required=True, help="Port of the *arr clients")
+    parser.add_argument("-a", "--apikey", required=True, help="IP Address of the *arr clients")
+    parser.add_argument("--open-subtitles-username", help="OpenSubtitles.org/.com username")
+    parser.add_argument("--open-subtitles-password", help="OpenSubtitles.org/.com password")
+    args = vars(parser.parse_args())
+
+    configure_all_apps(args)
+    print("success")
+
+main()
