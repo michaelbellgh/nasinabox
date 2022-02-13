@@ -109,3 +109,5 @@ credentials.py
 docker_data.zip
 private_esxi
 *.bak
+inventory/standalone
+data/vars/vm.yml
