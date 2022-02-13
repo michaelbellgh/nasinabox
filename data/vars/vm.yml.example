@@ -1,0 +1,27 @@
+creds: {guest_pass: nasinabox, guest_user: nasinabox}
+
+nas: { open_subtitles_username: "myusername", open_subtitles_password: "mypassword"}
+
+api_key: "4nnuqufdm909hthay5rnu0fq8mbix36j"
+
+
+paths: {src_iso: ../data/ubuntu64.iso }
+
+vminfo:
+   vm_id: nasinabox
+   guest_user: nasinabox
+   guest_pass: nasinabox
+   cores_per_cpu: '4'
+   disk_size_gb: '100'
+   storage_size: '1000'
+   dns_suffix: nasinabox-myinstance.local
+   domain: nasinabox-myinstance.local
+   guest_id: ubuntu64guest
+   hostname: nasinabox-myinstance
+   memory_mb: '8192'
+   num_cpus: '4'
+   service_user: "media"
+
+
+
+  
