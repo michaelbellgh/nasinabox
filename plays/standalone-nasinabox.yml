@@ -59,6 +59,15 @@
       become: yes
 
 
+    - name: GPG Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker APT repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+
     - name: Install additional packages
       apt:
         update_cache: yes
@@ -165,14 +174,7 @@
         path: "/home/docker/docker_data/traefik/acme.json"
         state: touch
     
-    - name: GPG Key
-      apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
-        state: present
 
-    - name: Add Docker APT repository
-      apt_repository:
-        repo: deb https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
 
     
     - name: Enable unattended-upgrades
