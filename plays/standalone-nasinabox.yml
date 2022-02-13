@@ -51,6 +51,41 @@
       when: set_system_settings.changed
     
 
+    - name: Upgrade packages and distro
+      apt:
+        update_cache: yes
+        upgrade: full
+        state: fixed
+      become: yes
+
+
+    - name: Install additional packages
+      apt:
+        update_cache: yes
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg-agent
+          - software-properties-common
+          - docker-ce
+          - docker-ce-cli
+          - unzip
+          - containerd.io
+          - python3-pip
+          - zip
+          - avahi-daemon
+          - unattended-upgrades
+        state: present
+      become: yes
+
+    - name: Upgrade pip for python3
+      pip:
+        name:
+          - pip
+          - docker-py
+        executable: "/usr/bin/pip3"
+
     - name: create root key
       openssl_privatekey:
         path: /tmp/root.pem
@@ -128,6 +163,7 @@
       file:
         mode: 0600
         path: "/home/docker/docker_data/traefik/acme.json"
+        state: touch
     
     - name: GPG Key
       apt_key:
@@ -138,34 +174,7 @@
       apt_repository:
         repo: deb https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
 
-    - name: Upgrade packages and distro
-      apt:
-        update_cache: yes
-        upgrade: full
-        state: fixed
-      become: yes
-
-
-    - name: Install additional packages
-      apt:
-        update_cache: yes
-        name:
-          - apt-transport-https
-          - ca-certificates
-          - curl
-          - gnupg-agent
-          - software-properties-common
-          - docker-ce
-          - docker-ce-cli
-          - unzip
-          - containerd.io
-          - python3-pip
-          - zip
-          - avahi-daemon
-          - unattended-upgrades
-        state: present
-      become: yes
-
+    
     - name: Enable unattended-upgrades
       lineinfile:
         path: /etc/apt/apt.conf.d/20auto-upgrades
@@ -176,13 +185,6 @@
        - {'regexp': '^APT::Periodic::Unattended-Upgrade: .+', 'text': 'APT::Periodic::Unattended-Upgrade: "1";'}
        - {'regexp': '^APT::Periodic::AutocleanInterval: .+', 'text': 'APT::Periodic::AutocleanInterval: "7";'}
 
-
-    - name: Upgrade pip for python3
-      pip:
-        name:
-          - pip
-          - docker-py
-        executable: "/usr/bin/pip3"
 
     - name: create internal docker network
       community.general.docker_network:
@@ -203,25 +205,6 @@
         uid: 1001
         shell: /bin/bash
         createhome: yes
-
-    - name: Restore backup
-      copy:
-        src: ../data/backup/docker_data.zip
-        dest: /home/docker/docker_data.zip
-        force: yes
-      when: restore is defined
-
-    - name: Unzip backup
-      unarchive:
-        remote_src: yes
-        src: /home/docker/docker_data.zip
-        dest: /home/docker/
-      when: restore is defined
-    
-    - name: Set host IP Addressing
-      copy:
-        src: ../data/netplan.yaml
-        dest: /etc/netplan/netplan.yaml
 
     - name: Check if Storage exist
       stat:
@@ -261,13 +244,15 @@
       file:
         path: /mnt/Storage/
         mode: '644'
+        state: directory
       become: yes
       when: storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
 
     - name: Set permissions on Docker Data
       file:
         path: /home/docker/docker_data
-        mode: '644'
+        recurse: yes
+        mode: '0744'
       become: yes
 
 
@@ -520,6 +505,34 @@
       register: docker_dashmachine
 
 
+    - name: Start samba
+      docker_container:
+        name: samba
+        image: dperson/samba
+        env: 
+         TZ: Australia/Melbourne
+         USERID: "1001"
+         GROUPID: "1001"
+         NMBD: "yes"
+        network_mode: host
+        volumes:
+        - /mnt/Storage/Movies:/movies
+        - /mnt/Storage/TV:/tv
+        - /mnt/Storage/Music:/music
+        - /mnt/Storage/Downloads:/downloads
+        - /mnt/Storage/Share:/share
+        - /mnt/Storage/files:/files
+        command:
+         - "-s TV;/tv;yes;yes;yes;all;none"
+         - "-s Movies;/movies;yes;yes;yes;all;none"
+         - "-s Downloads;/downloads;yes;yes;yes;all;none"
+         - "-s Music;/music;yes;no;yes;all;none"
+         - "-s Share;/share;yes;no;yes;all;none"
+         - "-s Files;/files;yes;no;yes;all;none"
+        restart_policy: unless-stopped
+        purge_networks: yes
+
+
 
 
     - name: Run traefik
@@ -630,12 +643,7 @@
       become: yes
       when: not deluge_web_conf.stat.exists
 
-    - name: Wait for deluge web.conf generation
-      wait_for:
-        path: /home/docker/docker_data/config/web.conf
-        state: present
-      when: not deluge_web_conf.stat.exists
-      
+
 
     - name: Set URL base on configs
       replace:
@@ -663,18 +671,45 @@
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/radarr/config/config.xml"}
-        - { regexp: 'apikey[\s\=]*[a-zA-Z0-9]*\n', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
-        - { regexp: 'api_key[\s\=]*[a-zA-Z0-9]*\n', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/lazylibrarian/config/config.ini"}
+        - { regexp: 'apikey[\s\=]*[a-zA-Z0-9]*', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
+        - { regexp: 'api_key[\s\=]*[a-zA-Z0-9]*', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/lazylibrarian/config/config.ini"}
         - { regexp: '"APIKey"\s*\:\s*"[a-zA-Z0-9]*"', line: '"APIKey" : "{{ vm_vars.api_key }}"', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
       register: api_change_output
 
+    - name: Generate Deluge web.conf
+      set_fact:
+        deluge_web_conf_content: '
+        {
+    "file": 2,
+    "format": 1
+}{
+      "base" : "/deluge",
+    "cert": "ssl/daemon.cert",
+    "default_daemon": "",
+    "enabled_plugins": [],
+    "first_login": false,
+    "https": false,
+    "interface": "0.0.0.0",
+    "language": "",
+    "pkey": "ssl/daemon.pkey",
+    "port": 8112,
+    "pwd_salt": "c26ab3bbd8b137f99cd83c2c1c0963bcc1a35cad",
+    "pwd_sha1": "2ce1a410bcdcc53064129b6d950f2e9fee4edc1e",
+    "session_timeout": 3600,
+    "show_session_speed": false,
+    "show_sidebar": true,
+    "sidebar_multiple_filters": true,
+    "sidebar_show_zero": false,
+    "theme": "gray"
+}'
+      when: not deluge_web_conf.stat.exists
 
  
     - name: Restart deluge, allow web.conf generation
-      community.docker.docker_container:
-        name: deluge
-        state: started
-        restart: yes
+      copy:
+        dest: /home/docker/docker_data/deluge/config/web.conf
+        content: "{{ deluge_web_conf_content }}"
+        
       become: yes
       when: not deluge_web_conf.stat.exists
 
@@ -732,20 +767,6 @@
       with_items:
        - "avahi-daemon"
 
-       
-
-    - name: Backup
-      archive:
-        path: /home/docker/docker_data
-        dest: /tmp/docker_data.zip
-        format: zip
-      when: backup is defined
-    - name: Backup copy
-      fetch:
-        src: /tmp/docker_data.zip
-        dest: ../data/backup/docker_data.zip
-        become: yes
-      when: backup is defined
 
     - name: Restart all containers
       shell: docker restart $(docker ps -q)

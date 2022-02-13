@@ -2,6 +2,8 @@ creds: {guest_pass: nasinabox, guest_user: nasinabox}
 
 options: {copy_iso: false, delete_existing: true, validate_certs: false}
 
+nas: { open_subtitles_username: micshadow, open_subtitles_password: "mGpc*7jU4FCQ5bZrKwbpJpZVC"}
+
 api_key: "550b89c425784e9a8f32869e54df552a"
 
 
@@ -9,7 +11,7 @@ paths: {src_iso: ../data/ubuntu64.iso, target_datastore: VMS,
   target_folder: /, target_iso_filepath: ubuntu64.iso, target_storage_datastore: 'VMS'}
 
 vminfo:
-   vm_id: nasinabox-myinstance
+   vm_id: nasinabox-chrisd
    guest_user: nasinabox
    guest_pass: nasinabox
    cores_per_cpu: '4'

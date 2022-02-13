@@ -294,6 +294,7 @@ def bazarr_configure_lang_profile(darr: darr_instance, language="en", validate_c
 
 def make_post_request(url, json_body, headers, verify):
     resp = requests.post(url, json=json_body, headers=headers, verify=verify)
+    print(resp)
 
 def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key, jackett_scheme, jackett_hostname: str, jackett_port: int, jackett_path, int_jackett_scheme, int_jackett_hostname, int_jackett_port, int_jackett_path, validate_certs=False, categories=[5030, 5040]):
     url = jackett_scheme + "://" + jackett_hostname + ":" + str(jackett_port) + jackett_path + "/api/v2.0/indexers/?configured=true"
