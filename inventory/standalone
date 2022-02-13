@@ -1,2 +1,0 @@
-[nas]
-10.0.0.220 ansible_become_password=nasPassword1234! ansible_user=nas ansible_password=nasPassword1234!
