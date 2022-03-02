@@ -387,8 +387,8 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
-    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040])
-    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060])
+    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
+    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
 
 
 
