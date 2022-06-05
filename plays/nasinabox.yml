@@ -23,7 +23,7 @@
       file:
         path: "{{ item }}"
         state: directory
-        mode: '0644'
+        mode: '0744'
       with_items:
        - "/home/docker/docker_data/traefik/"
        - "/var/www/ssl"
@@ -147,6 +147,7 @@
         dest: "{{ item.dest }}"
         force: yes
         remote_src: yes
+        mode: '0744'
       with_items:
        - { src: "/tmp/root.crt", dest: "/usr/local/share/ca-certificates/"}
        - { src: "/tmp/webca.crt", dest: "/usr/local/share/ca-certificates/"}
@@ -155,7 +156,7 @@
       when: root_key.changed
 
     - name: Update CA store
-      shell: update-ca-certificates
+      command: update-ca-certificates
       when: root_key.changed
 
     - name: Copy all required pre install files
@@ -541,10 +542,11 @@
       docker_container:
         name: traefik
         recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_lazylibrarian.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
+        published_ports: ["80:80", "443:443", "8080"]
         labels: 
           "traefik.enable": "true"
           "traefik.http.routers.api.rule": "PathPrefix(`/traefik`)"
-          "traefik.http.routers.api.entrypoints": "https"
+          "traefik.http.routers.api.entrypoints": "https,http"
           "traefik.http.routers.api.service": "dashboard@internal"
           "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme": "https" 
           "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent": "true"
@@ -778,6 +780,7 @@
       become: no
       register: configurator_w_support
       when: vm_vars.nas.open_subtitles_username is defined and vm_vars.nas.open_subtitles_password is defined
+      failed_when: "'success' not in configurator_w_support.stdout"
       
 
     - name: Run configurator
@@ -788,6 +791,7 @@
       become: no
       register: configurator
       when: "configurator_w_support is not defined"
+      failed_when: "'success' not in configurator.stdout"
 
     - name: Enable services
       systemd:
@@ -798,19 +802,34 @@
        - "avahi-daemon"
 
 
+    - name: Set permissions (dirs)
+      file:
+        path: "{{ item.path }}"
+        recurse: yes
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      become: yes
+      with_items:
+       - { path: "/mnt/Storage", owner: media, group: media, mode: '0744' }
+       - { path: "/home/docker/docker_data/", owner: media, group: media, mode: '0744' }
+      register: final_permissions_dir
+
+    - name: Set permissions (files)
+      file:
+        path: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      become: yes
+      with_items:
+       - { path: "/home/docker/docker_data/traefik/acme.json", owner: media, group: media, mode: '0600' }
+      register: final_permissions_files
+
+
     - name: Restart all containers
       shell: docker restart $(docker ps -q)
       when: restart is defined
-
-    - name: Set permissions (mode)
-      file:
-        path: "/mnt/"
-        recurse: yes
-        mode: '777'
-      become: yes
-      with_items:
-       - "/mnt/"
-       - "/home/docker/docker_data/"
 
 
 

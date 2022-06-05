@@ -1,45 +1,12 @@
 
-import enum
-from operator import truediv
-from ssl import VerifyFlags
 import threading
 import requests, json, argparse
 
 
-import logging
-import contextlib
-try:
-    from http.client import HTTPConnection # py3
-except ImportError:
-    from httplib import HTTPConnection # py2
+import urllib3
 
-def debug_requests_on():
-    '''Switches on logging of the requests module.'''
-    HTTPConnection.debuglevel = 1
+urllib3.disable_warnings()
 
-    logging.basicConfig()
-    logging.getLogger().setLevel(logging.DEBUG)
-    requests_log = logging.getLogger("requests.packages.urllib3")
-    requests_log.setLevel(logging.DEBUG)
-    requests_log.propagate = True
-
-def debug_requests_off():
-    '''Switches off logging of the requests module, might be some side-effects'''
-    HTTPConnection.debuglevel = 0
-
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.WARNING)
-    root_logger.handlers = []
-    requests_log = logging.getLogger("requests.packages.urllib3")
-    requests_log.setLevel(logging.WARNING)
-    requests_log.propagate = False
-
-@contextlib.contextmanager
-def debug_requests():
-    '''Use with 'with'!'''
-    debug_requests_on()
-    yield
-    debug_requests_off()
 
 def api_request_darr(hostname: str, port: int, path: str, api_key: str, json: str, scheme: str="https", method: str="POST", verify_certificate=False):
     uri = scheme + "://" + hostname + ":" + str(port) + path + "?apikey=" + api_key
@@ -258,38 +225,37 @@ def bazarr_configure_radarr_provider(darr: darr_instance, radarr_instance: darr_
     return response.status_code == 200
 
 def bazarr_configure_lang_profile(darr: darr_instance, language="en", validate_certs=False):
-    with debug_requests():
-        language_profiles = json.dumps([{ \
-            "profileId": 1,
-            "name": language,
-            "items": [ \
-                {
-                    "id": 1,
-                    "language": language,
-                    "audio_exclude": False,
-                    "hi": False,
-                    "forced": False
-                }
-            ],
-            "cutoff": 65535,
-            "mustContain": [],
-            "mustNotContain": []
-        }])
+    language_profiles = json.dumps([{ \
+        "profileId": 1,
+        "name": language,
+        "items": [ \
+            {
+                "id": 1,
+                "language": language,
+                "audio_exclude": False,
+                "hi": False,
+                "forced": False
+            }
+        ],
+        "cutoff": 65535,
+        "mustContain": [],
+        "mustNotContain": []
+    }])
 
-        body = { \
-            "settings-general-serie_default_enabled" : (None,True),
-            "settings-general-movie_default_enabled" : (None,True),
-            "settings-general-serie_default_profile" : (None,1),
-            "settings-general-movie_default_profile" :(None,1),
-            "languages-enabled" : (None,language),
-            "languages-profiles" : (None, language_profiles)
-        }
+    body = { \
+        "settings-general-serie_default_enabled" : (None,True),
+        "settings-general-movie_default_enabled" : (None,True),
+        "settings-general-serie_default_profile" : (None,1),
+        "settings-general-movie_default_profile" :(None,1),
+        "languages-enabled" : (None,language),
+        "languages-profiles" : (None, language_profiles)
+    }
 
-        headers = {"x-api-key": darr.api_key}
+    headers = {"x-api-key": darr.api_key}
 
-        url = darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/system/settings"
-        response = requests.post(url, files=body, headers=headers, verify=validate_certs)
-        return response.status_code == 204
+    url = darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/system/settings"
+    response = requests.post(url, files=body, headers=headers, verify=validate_certs)
+    return response.status_code == 204
 
 
 def make_post_request(url, json_body, headers, verify):
@@ -387,8 +353,8 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
-    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040])
-    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060])
+    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
+    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
 
 
 
