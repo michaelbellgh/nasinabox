@@ -224,7 +224,7 @@ def bazarr_configure_radarr_provider(darr: darr_instance, radarr_instance: darr_
     response = requests.post(url, files=body, headers=headers, verify=validate_certs)
     return response.status_code == 200
 
-def bazarr_configure_lang_profile(darr: darr_instance, language="en", validate_certs=False):
+def bazarr_configure_lang_profile(darr: darr_instance, language="en", validate_certs=False) -> bool:
     language_profiles = json.dumps([{ \
         "profileId": 1,
         "name": language,
@@ -257,6 +257,33 @@ def bazarr_configure_lang_profile(darr: darr_instance, language="en", validate_c
     response = requests.post(url, files=body, headers=headers, verify=validate_certs)
     return response.status_code == 204
 
+def heimdall_add_items(scheme: str, hostname: str, port: int, heimdall_path: str, api_key, validate_certs: bool=False):
+    url = scheme  + "://" + hostname + ":" + str(port) + heimdall_path
+
+    heimdall_session = requests.Session()
+
+    ombi_fields = {
+        "appid": "57b25ceb94bd4c9ba9038ce17656f5ede9007e4c",
+        "title": "Ombi",
+        "colour": "#161b1f",
+        "url": scheme + "://" + hostname + ":" + str(port) + heimdall_path + "/ombi",
+        "tags[]": 0,
+        "icon": "https://appslist.heimdall.site/icons/ombi.png",
+        "appdescription": "Ombi - Media Requests",
+        "config[enabled]": 1,
+        "config[override_url]": scheme + "://" + hostname + ":" + str(port) + heimdall_path + "/ombi",
+        "pinned": 1,
+        "website": None,
+        "config[apikey]": api_key
+    }
+
+    main_response = heimdall_session.get(url, verify=validate_certs)
+    main_response = heimdall_session.get(url + "items", verify=validate_certs)
+    main_response = heimdall_session.get(url + "items/create")
+
+
+    response = heimdall_session.post(url + "items", data=ombi_fields, verify=validate_certs)
+    return response.status_code == 200
 
 def make_post_request(url, json_body, headers, verify):
     resp = requests.post(url, json=json_body, headers=headers, verify=verify)
@@ -360,6 +387,9 @@ def configure_all_apps(vars):
 
 
 def main():
+
+    heimdall_add_items("https", "nasinabox", 443, "/", "550b89c425784e9a8f32869e54df552a")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--hostname", required=True, help="IP Address/Hostname of the *arr clients")
     parser.add_argument("-p", "--port", required=True, help="Port of the *arr clients")

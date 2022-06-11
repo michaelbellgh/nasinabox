@@ -85,6 +85,7 @@
           - zip
           - avahi-daemon
           - unattended-upgrades
+          - parted
         state: present
       become: yes
 
@@ -271,6 +272,11 @@
           "traefik.http.services.deluge.loadbalancer.server.port": "8112"
           "traefik.http.routers.deluge.middlewares": "deluge-stripprefix@docker"
           "traefik.http.middlewares.deluge-stripprefix.stripprefix.prefixes": "/deluge"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: "Australia/Melbourne"
          PUID: "1001"
@@ -314,6 +320,11 @@
           "traefik.http.routers.jackett.entrypoints": "https"
           "traefik.http.routers.jackett.tls.certresolver": "letsencrypt"
           "traefik.http.services.jackett.loadbalancer.server.port": "9117"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: Australia/Melbourne
          AUTO_UPDATE: "true"
@@ -342,6 +353,11 @@
           "traefik.http.routers.lidarr.entrypoints": "https"
           "traefik.http.routers.lidarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.lidarr.loadbalancer.server.port": "8686"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["jackett", "deluge"]
@@ -364,6 +380,11 @@
           "traefik.http.routers.radarr.entrypoints": "https"
           "traefik.http.routers.radarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.radarr.loadbalancer.server.port": "7878"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: Australia/Melbourne
          PUID: "1001"
@@ -422,6 +443,11 @@
           "traefik.http.routers.ombi.tls.certresolver": "letsencrypt"
           "traefik.http.services.ombi.loadbalancer.server.port": "3579"
           "traefik.http.middlewares.protoheader.headers.customrequestheaders.X-Forwarded-Proto": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["sonarr", "radarr"]
@@ -448,6 +474,11 @@
           "traefik.http.routers.bazarr.entrypoints": "https"
           "traefik.http.routers.bazarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.bazarr.loadbalancer.server.port": "6767"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["sonarr", "radarr"]
@@ -474,6 +505,11 @@
           "traefik.http.routers.library.entrypoints": "https"
           "traefik.http.routers.library.tls.certresolver": "letsencrypt"
           "traefik.http.services.library.loadbalancer.server.port": "5299"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         volumes:
         - /home/docker/docker_data/lazylibrarian/config:/config
         - /mnt/Storage/Books:/books
@@ -486,26 +522,32 @@
         purge_networks: yes
       register: docker_lazylibrarian
 
-    - name: Start Dashmachine
+    - name: Start Homer
       docker_container:
-        name: dashmachine
-        image: rmountjoy/dashmachine:latest
+        name: homer
+        image: b4bz/homer:latest
         env:
-          CONTEXT_PATH: /
+          PUID: "1001"
+          PGID: "1001"
+          TZ: Australia/Melbourne
         volumes:
-        - /home/docker/docker_data/dashmachine/:/dashmachine/dashmachine/user_data
-        - /home/docker/docker_data/dashmachine/user_data/icons:/dashmachine/static/images/icons
+        - /home/docker/docker_data/homer:/www/assets
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.dashmachine.rule": "PathPrefix(`/`)"
-          "traefik.http.routers.dashmachine.tls": "true"
-          "traefik.http.routers.dashmachine.entrypoints": "https"
-          "traefik.http.services.dashmachine.loadbalancer.server.port": "5000"
+          "traefik.http.routers.homer.rule": "PathPrefix(`/`)"
+          "traefik.http.routers.homer.tls": "true"
+          "traefik.http.routers.homer.entrypoints": "https"
+          "traefik.http.services.homer.loadbalancer.server.port": "8080"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"  
         networks:
-        - name: docker
+         - name: docker
         restart_policy: unless-stopped
         purge_networks: yes
-      register: docker_dashmachine
+      register: docker_homer
 
 
     - name: Start samba
@@ -548,11 +590,11 @@
           "traefik.http.routers.api.rule": "PathPrefix(`/traefik`)"
           "traefik.http.routers.api.entrypoints": "https,http"
           "traefik.http.routers.api.service": "dashboard@internal"
-          "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme": "https" 
-          "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent": "true"
-          "traefik.http.routers.redirs.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.redirs.entrypoints": "http"
-          "traefik.http.routers.redirs.middlewares": "redirect-to-https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         image: "traefik:latest"
         network_mode: host
         restart_policy: unless-stopped
@@ -593,28 +635,6 @@
         remote_src: yes
         dest: /home/docker/docker_data/jackett/config/Jackett/
 
-    - name: Copy dashmachine config
-      copy:
-        src: ../data/dashmachine/user_data/config.ini
-        dest: /home/docker/docker_data/dashmachine/config.ini
-      register: dashmachine_config
-    
-    - name: Replace dashmachine locations
-      replace:
-        regexp: "nas.local"
-        replace: "{{ ansible_hostname }}"
-        path: "/home/docker/docker_data/dashmachine/config.ini"
-      register: dashmachine_locations
-
-    - name: Copy dashmachine icons
-      copy:
-        src: ../data/dashmachine/user_data/icons/
-        dest: /home/docker/docker_data/dashmachine/icons/
-        force: yes
-      when: dashmachine_config.changed and dashmachine_locations.changed
-      
-
-
     - name: Check if deluge web.conf is missing
       stat: 
         path: /home/docker/docker_data/deluge/config/web.conf
@@ -631,7 +651,7 @@
         "base" : "/deluge",
         "cert": "ssl/daemon.cert",
         "default_daemon": "",
-        "enabled_plugins": [],
+        "enabled_plugins": ["Label", "Execute"],
         "first_login": false,
         "https": false,
         "interface": "0.0.0.0",
@@ -663,7 +683,7 @@
         path: "{{ item.path }}"
       with_items:
        - { regexp: '"/root/Downloads"', line: '"/downloads"', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '"enabled_plugins"(\s)?:\s+\[([^\]]+)\]', line: '"enabled_plugins": ["Label", "Execute"]', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"enabled_plugins\"[:\s]+\[.*]', line: '"enabled_plugins": ["Label", "Execute"]', path: "/home/docker/docker_data/deluge/config/core.conf"}
       when: not deluge_web_conf.stat.exists
       
 

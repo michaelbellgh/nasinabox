@@ -111,3 +111,4 @@ private_esxi
 *.bak
 inventory/standalone.yml
 data/vars/vm.yml
+inventory/
