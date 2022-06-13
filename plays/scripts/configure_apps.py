@@ -149,7 +149,7 @@ class darr_instance:
 def darr_add_root_folder(darr : darr_instance, path):
     api_request_darr(darr.hostname, darr.port, darr.path + "/api/v3/rootFolder", darr.api_key, json.dumps({"path" : path}), darr.scheme)
 
-def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: str, torrent_port: int, torrent_path: str, torrent_username: str, torrent_password: str, implementation: str="Transmission"):
+def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: str, torrent_port: int, torrent_path: str, torrent_username: str, torrent_password: str, implementation: str="Transmission", api_version="v3"):
     body = {"configContract" : implementation + "Settings", "enable": True, "implementation" : implementation, "implementationName" : implementation, "name" : name, "priority" : 1, "protocol" : "torrent", "tags" : []}
     fields = []
     fields.append({"name" : "host", "value" : name})
@@ -170,7 +170,7 @@ def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: s
 
     body.update({'fields' : fields})
 
-    api_request_darr(darr.hostname, darr.port, darr.path + "/api/v3/downloadclient", darr.api_key, body, darr.scheme, "POST")
+    api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/downloadclient", darr.api_key, body, darr.scheme, "POST")
 
 
 def darr_add_root_folder(darr: darr_instance, folder: str):
@@ -289,11 +289,11 @@ def make_post_request(url, json_body, headers, verify):
     resp = requests.post(url, json=json_body, headers=headers, verify=verify)
     print(resp)
 
-def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key, jackett_scheme, jackett_hostname: str, jackett_port: int, jackett_path, int_jackett_scheme, int_jackett_hostname, int_jackett_port, int_jackett_path, validate_certs=False, categories=[5030, 5040]):
+def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key, jackett_scheme, jackett_hostname: str, jackett_port: int, jackett_path, int_jackett_scheme, int_jackett_hostname, int_jackett_port, int_jackett_path, validate_certs=False, categories=[5030, 5040], api_version="v3"):
     url = jackett_scheme + "://" + jackett_hostname + ":" + str(jackett_port) + jackett_path + "/api/v2.0/indexers/?configured=true"
     response_json = requests.get(url, verify=validate_certs).json()
     
-    current_darr_indexers = requests.get(f"{darr.scheme}://{darr.hostname}:" + str(darr.port) + darr.path + "/api/v3/indexer", headers={"x-api-key" : darr.api_key}, verify=validate_certs).json()
+    current_darr_indexers = requests.get(f"{darr.scheme}://{darr.hostname}:" + str(darr.port) + darr.path + "/api/" + api_version + "/indexer", headers={"x-api-key" : darr.api_key}, verify=validate_certs).json()
     darr_indexers = [x["name"] for x in current_darr_indexers]
 
     threads = []
@@ -365,15 +365,18 @@ def configure_all_apps(vars):
     lidarr = darr_instance(vars['hostname'], vars['port'], "/lidarr", True, True, vars['apikey'], "https")
     radarr = darr_instance(vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], "https")
     bazarr = darr_instance(vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], "https")
+    readarr = darr_instance(vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], "https")
 
     
     darr_add_download_client(sonarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
-    darr_add_download_client(lidarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
+    darr_add_download_client(lidarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge", api_version="v1")
     darr_add_download_client(radarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
+    darr_add_download_client(readarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
 
     darr_add_root_folder(sonarr, "/tv/")
     darr_add_root_folder(lidarr, "/music/")
     darr_add_root_folder(radarr, "/movies/")
+    darr_add_root_folder(readarr, "/books/")
 
     bazarr_configure_english_providers(bazarr, vars['open_subtitles_username'], vars['open_subtitles_password'])
     bazarr_configure_sonarr_provider(bazarr, sonarr)
@@ -382,13 +385,13 @@ def configure_all_apps(vars):
 
     darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
     darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
+    darr_add_all_configured_jacket_indexers(readarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[3030, 7020, 8010], api_version="v1")
+    darr_add_all_configured_jacket_indexers(lidarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[3000,3010,3020,3030,3040], api_version="v1")
 
 
 
 
 def main():
-
-    heimdall_add_items("https", "nasinabox", 443, "/", "550b89c425784e9a8f32869e54df552a")
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--hostname", required=True, help="IP Address/Hostname of the *arr clients")

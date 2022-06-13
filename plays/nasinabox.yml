@@ -128,7 +128,8 @@
       openssl_csr:
         path: /tmp/webca.csr
         privatekey_path: "{{ root_key.filename }}"
-        common_name: "*.{{ vm_vars.vminfo.hostname }}.local"
+        common_name: "{{ vm_vars.vminfo.hostname }}.local"
+        subject_alt_name: "DNS:{{ vm_vars.vminfo.hostname }}.local"
       register: webca_csr
       when: root_key.changed
 
@@ -169,6 +170,7 @@
       with_items:
        - { src: "../data/traefik/traefik.yml", dest: "/home/docker/docker_data/traefik/traefik.yml", force: yes}
        - { src: "../data/traefik/certs.yml", dest: "/home/docker/docker_data/traefik/certs.yml" , force: yes}
+       - { src: "../data/homer/icons/", dest: "/home/docker/docker_data/homer/icons/", force: yes}
 
     - name: Set permissions for ACME
       file:
@@ -252,6 +254,9 @@
       become: yes
       when: storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
 
+
+
+
     - name: Set permissions on Docker Data
       file:
         path: /home/docker/docker_data
@@ -259,6 +264,19 @@
         mode: '0744'
       become: yes
 
+    - name: Delete all docker containers
+      shell: "{{ item }}"
+      with_items: 
+       - "docker stop $(docker ps -aq)"
+       - "docker rm $(docker ps -aq)"
+       - "docker rmi $(docker images -q)"
+      when: wipe is defined
+  
+    - name: Wipe all data
+      file:
+        path: /home/docker/docker_data
+        state: absent
+      when: wipe is defined
 
     - name: Start Deluge
       docker_container:
@@ -450,7 +468,7 @@
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
-          links: ["sonarr", "radarr"]
+          links: ["sonarr", "radarr", "ombi"]
         volumes:
         - /home/docker/docker_data/ombi/config:/config
         - "/var/www/ssl/:/ssl"
@@ -491,36 +509,35 @@
         purge_networks: yes
       register: docker_bazarr
 
-    - name: Start lazylibrarian
+    - name: Start readarr
       docker_container:
-        name: lazylibrarian
-        image: linuxserver/lazylibrarian
+        name: readarr
+        image: hotio/readarr:testing
         env: 
          TZ: Australia/Melbourne
          PUID: "1001"
          PGID: "1001"
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.library.rule": "PathPrefix(`/library`)"
-          "traefik.http.routers.library.entrypoints": "https"
-          "traefik.http.routers.library.tls.certresolver": "letsencrypt"
-          "traefik.http.services.library.loadbalancer.server.port": "5299"
+          "traefik.http.routers.readarr.rule": "PathPrefix(`/readarr`)"
+          "traefik.http.routers.readarr.entrypoints": "https"
+          "traefik.http.routers.readarr.tls.certresolver": "letsencrypt"
+          "traefik.http.services.readarr.loadbalancer.server.port": "8787"
           "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
           "traefik.http.routers.http_catchall.entrypoints": "http"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         volumes:
-        - /home/docker/docker_data/lazylibrarian/config:/config
-        - /mnt/Storage/Books:/books
-        - /mnt/Storage/Downloads:/downloads
+        - "/home/docker/docker_data/readarr:/config"
+        - "/mnt/Storage/Books"
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         networks:
         - name: "docker"
           links: ["jackett", "deluge"]
         purge_networks: yes
-      register: docker_lazylibrarian
+      register: docker_readarr
 
     - name: Start Homer
       docker_container:
@@ -583,8 +600,7 @@
     - name: Run traefik
       docker_container:
         name: traefik
-        recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_lazylibrarian.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
-        published_ports: ["80:80", "443:443", "8080"]
+        recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_readarr.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
         labels: 
           "traefik.enable": "true"
           "traefik.http.routers.api.rule": "PathPrefix(`/traefik`)"
@@ -616,9 +632,7 @@
         recurse: yes
         mode: '777'
       become: yes
-      with_items:
-       - "/mnt/"
-       - "/home/docker/docker_data/"
+
 
     - name: Stop all docker containers
       shell: "docker kill $(docker ps -q)"
@@ -706,8 +720,8 @@
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/lidarr</UrlBase>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/sonarr</UrlBase>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/radarr</UrlBase>", path: "/home/docker/docker_data/radarr/config/config.xml"}
+       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/readarr</UrlBase>", path: "/home/docker/docker_data/readarr/config.xml"}
        - { regexp: 'base_url.+\=(.+)*', line: "base_url = /bazarr", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
-       - { regexp: 'http_root.+\=(.+)*', line: "http_root = /library", path: "/home/docker/docker_data/lazylibrarian/config/config.ini"}
        - { regexp: '"BasePathOverride"(\s+)?\:\s+[^,\r\n]+', line: '"BasePathOverride": "/jackett"', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
        - { regexp: '"base":\s+".+"', line: '  "base" : "/deluge"', path: "/home/docker/docker_data/deluge/config/web.conf"}
       register: url_base_output
@@ -723,8 +737,8 @@
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/radarr/config/config.xml"}
+        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/readarr/config.xml"}
         - { regexp: 'apikey[\s\=]*[a-zA-Z0-9]*', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
-        - { regexp: 'api_key[\s\=]*[a-zA-Z0-9]*', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/lazylibrarian/config/config.ini"}
         - { regexp: '"APIKey"\s*\:\s*"[a-zA-Z0-9]*"', line: '"APIKey" : "{{ vm_vars.api_key }}"', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
       register: api_change_output
 
@@ -770,9 +784,47 @@
         name: "{{ item }}"
         state: started
         restart: yes
-      with_items: ["lidarr", "sonarr", "radarr", "bazarr", "lazylibrarian", "jackett", "deluge"]
+      with_items: ["lidarr", "sonarr", "radarr", "bazarr", "readarr", "jackett", "deluge"]
       when: url_base_output.changed or api_change_output.changed
     
+
+    - name: Template homer dashboard
+      template:
+        src: ../data/homer/homer.j2
+        dest: /home/docker/docker_data/homer/config.yml
+        mode: '0777'
+
+    - name: Set homer permissions
+      file:
+        path: /home/docker/docker_data/homer/
+        mode: '0777'
+        recurse: yes
+
+    - name: Set permissions (dirs)
+      file:
+        path: "{{ item.path }}"
+        recurse: yes
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      become: yes
+      with_items:
+       - { path: "/mnt/Storage", owner: media, group: media, mode: '0744' }
+       - { path: "/home/docker/docker_data/", owner: media, group: media, mode: '0744' }
+       - { path: "/home/docker/docker_data/homer", owner: media, group: media, mode: '0777'}
+      register: final_permissions_dir
+
+    - name: Set permissions (files)
+      file:
+        path: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      become: yes
+      with_items:
+       - { path: "/home/docker/docker_data/traefik/acme.json", owner: media, group: media, mode: '0600' }
+      register: final_permissions_files
+
 
     - name: Start docker containers
       shell: "docker start $(docker ps -a -q)"
@@ -820,31 +872,6 @@
         state: started
       with_items:
        - "avahi-daemon"
-
-
-    - name: Set permissions (dirs)
-      file:
-        path: "{{ item.path }}"
-        recurse: yes
-        owner: "{{ item.owner }}"
-        group: "{{ item.group }}"
-        mode: "{{ item.mode }}"
-      become: yes
-      with_items:
-       - { path: "/mnt/Storage", owner: media, group: media, mode: '0744' }
-       - { path: "/home/docker/docker_data/", owner: media, group: media, mode: '0744' }
-      register: final_permissions_dir
-
-    - name: Set permissions (files)
-      file:
-        path: "{{ item.path }}"
-        owner: "{{ item.owner }}"
-        group: "{{ item.group }}"
-        mode: "{{ item.mode }}"
-      become: yes
-      with_items:
-       - { path: "/home/docker/docker_data/traefik/acme.json", owner: media, group: media, mode: '0600' }
-      register: final_permissions_files
 
 
     - name: Restart all containers

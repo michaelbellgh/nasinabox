@@ -1,0 +1,142 @@
+---
+# Homepage configuration
+# See https://fontawesome.com/v5/search for icons options
+
+title: "NAS"
+subtitle: "Media Server"
+logo: "assets/icons/plex.png"
+# icon: "fas fa-skull-crossbones" # Optional icon
+
+header: true
+footer: '<p>Portable NAS Server</p>'
+
+# Optional theme customization
+theme: default
+colors:
+  light:
+    highlight-primary: "#3367d6"
+    highlight-secondary: "#4285f4"
+    highlight-hover: "#5a95f5"
+    background: "#f5f5f5"
+    card-background: "#ffffff"
+    text: "#363636"
+    text-header: "#ffffff"
+    text-title: "#303030"
+    text-subtitle: "#424242"
+    card-shadow: rgba(0, 0, 0, 0.1)
+    link: "#3273dc"
+    link-hover: "#363636"
+  dark:
+    highlight-primary: "#3367d6"
+    highlight-secondary: "#4285f4"
+    highlight-hover: "#5a95f5"
+    background: "#131313"
+    card-background: "#2b2b2b"
+    text: "#eaeaea"
+    text-header: "#ffffff"
+    text-title: "#fafafa"
+    text-subtitle: "#f5f5f5"
+    card-shadow: rgba(0, 0, 0, 0.4)
+    link: "#3273dc"
+    link-hover: "#ffdd57"
+
+# Optional message
+message:
+  url: github.com/michaelbellgh/{{ vm_vars.vminfo.hostname }}.local
+  style: "is-dark" # See https://bulma.io/documentation/components/message/#colors for styling options.
+  title: "NAS In A Box"
+  icon: "fa fa-grin"
+  content: "To get started, click a link below"
+
+# Optional navbar
+# links: [] # Allows for navbar (dark mode, layout, and search) without any links
+#links:
+#  - name: "Contribute"
+#    icon: "fab fa-github"
+#    url: "https://github.com/bastienwirtz/homer"
+#    target: "_blank" # optional html a tag target attribute
+#  - name: "Wiki"
+#    icon: "fas fa-book"
+#    url: "https://www.wikipedia.org/"
+  # this will link to a second homer page that will load config from additional-page.yml and keep default config values as in config.yml file
+  # see url field and assets/additional-page.yml.dist used in this example:
+ # - name: "another page!"
+#    icon: "fas fa-file-alt"
+#    url: "#additional-page"
+
+# Services
+# First level array represent a group.
+# Leave only a "items" key if not using group (group name, icon & tagstyle are optional, section separation will not be displayed).
+services:
+  - name: "Media Players"
+    icon: "fas fa-cloud"
+    items:
+      - name: "Plex"
+        logo: "assets/icons/plex.png"
+        subtitle: "Plex Media Server"
+        tag: "app"
+        keywords: "plex media movie tv"
+        url: "http://{{ vm_vars.vminfo.hostname }}.local:32400/web/"
+        target: "_blank" # optional html a tag target attribute
+  - name: "Downloaders"
+    icon: "fas fa-cloud"
+    items:
+      - name: "Ombi"
+        logo: "assets/icons/ombi.png"
+        subtitle: "Browse TV, Movies to download"
+        tag: "app"
+        keywords: "media tv series movie"
+        url: "https://{{ vm_vars.vminfo.hostname }}.local/ombi"
+        target: "_blank" # optional html a tag target attribute
+      - name: "Sonarr"
+        logo: "assets/icons/sonarr.png"
+        subtitle: "Downloads TV Series"
+        tag: "app"
+        keywords: "media tv series"
+        url: "https://{{ vm_vars.vminfo.hostname }}.local/sonarr"
+        target: "_blank" # optional html a tag target attribute
+      - name: "Radarr"
+        logo: "assets/icons/radarr.png"
+        subtitle: "Downloads movies"
+        tag: "app"
+        keywords: "media tv series"
+        url: "https://{{ vm_vars.vminfo.hostname }}.local/radarr"
+        target: "_blank" # optional html a tag target attribute
+      - name: "Lidarr"
+        logo: "assets/icons/lidarr.png"
+        subtitle: "Downloads music albums"
+        tag: "app"
+        keywords: "media music mp3"
+        url: "https://{{ vm_vars.vminfo.hostname }}.local/lidarr"
+        target: "_blank" # optional html a tag target attribute
+      - name: "Bazarr"
+        logo: "assets/icons/bazarr.png"
+        subtitle: "Downloads subtitles for TV shows, movies"
+        tag: "app"
+        keywords: "media tv movie subtitles"
+        url: "https://{{ vm_vars.vminfo.hostname }}.local/bazarr"
+        target: "_blank" # optional html a tag target attribute
+      - name: "Jackett"
+        logo: "assets/icons/jackett.png"
+        subtitle: "Helps find downloads for TV shows, movies"
+        tag: "app"
+        keywords: "media tv movie torrent"
+        url: "https://{{ vm_vars.vminfo.hostname }}.local/jackett"
+        target: "_blank" # optional html a tag target attribute
+      - name: "Readarr"
+        logo: "assets/icons/readarr.png"
+        subtitle: "Downloads books"
+        tag: "app"
+        keywords: "media book ebook"
+        url: "https://{{ vm_vars.vminfo.hostname }}.local/readarr"
+        target: "_blank" # optional html a tag target attribute
+  - name: "Torrents"
+    icon: "fas fa-cloud"
+    items:
+      - name: "Deluge"
+        logo: "assets/icons/deluge.png"
+        subtitle: "Deluge"
+        tag: "app"
+        keywords: "plex media movie tv"
+        url: "https://{{ vm_vars.vminfo.hostname }}.local/deluge"
+        target: "_blank" # optional html a tag target attribute
