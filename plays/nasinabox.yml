@@ -1,5 +1,4 @@
 ---
- #TODO: Set up permissions, fix deluge, bazarr,jackett
  - name: Configure NAS (implementation stage)
    gather_facts: false
    hosts: nas
@@ -530,7 +529,7 @@
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         volumes:
         - "/home/docker/docker_data/readarr:/config"
-        - "/mnt/Storage/Books"
+        - "/mnt/Storage/Books:/books"
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         networks:
