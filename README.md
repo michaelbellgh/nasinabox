@@ -74,3 +74,8 @@ This project only has custom ansible playbooks and python configuration scripts 
 
 In addition to the above docker contaners, the configuration script (data/scripts/configure_apps.py) is included as part of this repo and will automatically configure the included applications to integrate with each other. 
 The exception to this is Ombi and Plex, as they require manual configuration with Plex credentials
+
+## SSL Certificate Warning
+By default, the ansible playbook will generate a new self signed cert.
+You can replace this with your own certificate (cn = hostname.local, SAN = DNS: hostname.local)
+You can also install this certificate as a Trusted Root certficate to remove certificate errors.
