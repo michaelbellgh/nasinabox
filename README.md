@@ -77,5 +77,7 @@ The exception to this is Ombi and Plex, as they require manual configuration wit
 
 ## SSL Certificate Warning
 By default, the ansible playbook will generate a new self signed cert.
+
 You can replace this with your own certificate (cn = hostname.local, SAN = DNS: hostname.local)
+
 You can also install this certificate as a Trusted Root certficate to remove certificate errors.
