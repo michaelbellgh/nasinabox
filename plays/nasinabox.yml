@@ -85,6 +85,7 @@
           - avahi-daemon
           - unattended-upgrades
           - parted
+          - open-vm-tools
         state: present
       become: yes
 
