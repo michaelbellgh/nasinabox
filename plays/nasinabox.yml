@@ -855,13 +855,13 @@
       
 
     - name: Run configurator
-      command: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p 443 -a {{ vm_vars.api_key }} {{ '--open-subtitles-username' vm_vars.nas.open_subtitles_username if vm_vars.nas.open_subtitles_username is defined }}"
+      command: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p 443 -a {{ vm_vars.api_key }}"
       delegate_to: localhost
       args:
         chdir: scripts
       become: no
       register: configurator
-      when: "configurator_w_support is not defined"
+      when: not configurator_w_support.changed
       failed_when: "'success' not in configurator.stdout"
 
     - name: Enable services

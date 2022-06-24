@@ -146,8 +146,10 @@ class darr_instance:
         self.v3 = v3
         self.api_key = api_key
 
-def darr_add_root_folder(darr : darr_instance, path):
-    api_request_darr(darr.hostname, darr.port, darr.path + "/api/v3/rootFolder", darr.api_key, json.dumps({"path" : path}), darr.scheme)
+def darr_add_root_folder(darr : darr_instance, name, path, api_version="v3", additional_fields={}):
+    fields = {"path" : path, "name": name}
+    fields.update(additional_fields)
+    api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/rootFolder", darr.api_key, fields, darr.scheme)
 
 def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: str, torrent_port: int, torrent_path: str, torrent_username: str, torrent_password: str, implementation: str="Transmission", api_version="v3"):
     body = {"configContract" : implementation + "Settings", "enable": True, "implementation" : implementation, "implementationName" : implementation, "name" : name, "priority" : 1, "protocol" : "torrent", "tags" : []}
@@ -172,9 +174,6 @@ def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: s
 
     api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/downloadclient", darr.api_key, body, darr.scheme, "POST")
 
-
-def darr_add_root_folder(darr: darr_instance, folder: str):
-    api_request_darr(darr.hostname, darr.port, darr.path + "/api/v3/rootFolder", darr.api_key, {"path" : folder})
 
 
 def bazarr_configure_english_providers(darr: darr_instance, open_subtitles_username: str=None, open_subtitles_password: str=None, validate_certs=False):
@@ -277,10 +276,6 @@ def heimdall_add_items(scheme: str, hostname: str, port: int, heimdall_path: str
         "config[apikey]": api_key
     }
 
-    main_response = heimdall_session.get(url, verify=validate_certs)
-    main_response = heimdall_session.get(url + "items", verify=validate_certs)
-    main_response = heimdall_session.get(url + "items/create")
-
 
     response = heimdall_session.post(url + "items", data=ombi_fields, verify=validate_certs)
     return response.status_code == 200
@@ -340,7 +335,7 @@ def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key
             "tags": []
         }
 
-        url = darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/v3/indexer?"
+        url = darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/" + api_version + "/indexer?"
 
         th = threading.Thread(target=make_post_request, args=(url, body, {"x-api-key" : darr.api_key}, validate_certs,))
         threads.append(th)
@@ -371,12 +366,12 @@ def configure_all_apps(vars):
     darr_add_download_client(sonarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
     darr_add_download_client(lidarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge", api_version="v1")
     darr_add_download_client(radarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
-    darr_add_download_client(readarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
+    darr_add_download_client(readarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge", api_version="v1")
 
-    darr_add_root_folder(sonarr, "/tv/")
-    darr_add_root_folder(lidarr, "/music/")
-    darr_add_root_folder(radarr, "/movies/")
-    darr_add_root_folder(readarr, "/books/")
+    darr_add_root_folder(sonarr, "/tv/", "/tv/")
+    darr_add_root_folder(lidarr, "/music/", "/music/", api_version="v1", additional_fields={"defaultMetadataProfileId": "1", "defaultQualityProfileId": "1", "defaultTags": []})
+    darr_add_root_folder(radarr, "/movies", "/movies/", api_version="v1")
+    darr_add_root_folder(readarr, "/books/", "/books/", additional_fields={"defaultMetadataProfileId": "1", "defaultQualityProfileId": "1", "defaultTags": [], "host": "localhost", "isCalibreLibrary": False, "outputProfile": "default", "port": 8080, "useSsl": False}, api_version="v1")
 
     bazarr_configure_english_providers(bazarr, vars['open_subtitles_username'], vars['open_subtitles_password'])
     bazarr_configure_sonarr_provider(bazarr, sonarr)
