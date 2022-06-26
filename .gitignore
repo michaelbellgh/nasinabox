@@ -112,3 +112,4 @@ private_esxi
 inventory/standalone.yml
 data/vars/vm.yml
 inventory/
+plays/scripts/blacklist.txt
