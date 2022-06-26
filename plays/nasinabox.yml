@@ -85,6 +85,8 @@
           - avahi-daemon
           - unattended-upgrades
           - parted
+          - sqlite
+          - open-vm-tools
         state: present
       become: yes
 
@@ -741,6 +743,16 @@
         - { regexp: '"APIKey"\s*\:\s*"[a-zA-Z0-9]*"', line: '"APIKey" : "{{ vm_vars.api_key }}"', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
       register: api_change_output
 
+    - name: Set Ombi API key (script creation)
+      copy: 
+        dest: "/tmp/ombi.sql"
+        content: |
+          update GlobalSettings set Content = '{"BaseUrl":"/ombi","CollectAnalyticData":true,"Wizard":true,"ApiKey":"4nnuqufdm909hthay5rnu0fq8mbix36j","DoNotSendNotificationsForAutoApprove":false,"HideRequestsUsers":false,"DisableHealthChecks":false,"DefaultLanguageCode":"en","AutoDeleteAvailableRequests":false,"AutoDeleteAfterDays":0,"Branch":0,"HasMigratedOldTvDbData":true,"Set":false,"Id":1}' where Id = 1;
+        mode: 0777
+
+    - name: Set Ombi API key (insert stage)
+      shell : "cat /tmp/ombi.sql |sqlite3 /home/docker/docker_data/ombi/config/OmbiSettings.db"
+
     - name: Generate Deluge web.conf
       set_fact:
         deluge_web_conf_content: '
@@ -783,7 +795,7 @@
         name: "{{ item }}"
         state: started
         restart: yes
-      with_items: ["lidarr", "sonarr", "radarr", "bazarr", "readarr", "jackett", "deluge"]
+      with_items: ["lidarr", "sonarr", "radarr", "bazarr", "readarr", "jackett", "deluge", "ombi"]
       when: url_base_output.changed or api_change_output.changed
     
 
@@ -843,26 +855,29 @@
        - "radarr"
 
 
+    - name: Set configurator fact base
+      set_fact:
+        cf_string: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p 443 -a {{ vm_vars.api_key }}"
+
+    - name: Add optional vars
+      set_fact: 
+        cf_string: "{{ cf_string + ' '  + item.key + ' ' + item.value }}"
+      when: item.value is defined
+      with_items:
+       - {key: "--open-subtitles-username", value: vm_vars.open_subtitles_username}
+       - {key: "--open-subtitles-password", value: vm_vars.open_subtitles_password}
+       - {key: "--plex-username", value: vm_vars.plex_username}
+       - {key: "--plex-password", value: vm_vars.plex_password}
+
     - name: Run configurator (with opensubtitles support)
-      command: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p 443 -a {{ vm_vars.api_key }} --open-subtitles-username {{ vm_vars.nas.open_subtitles_username }} --open-subtitles-password {{ vm_vars.nas.open_subtitles_password }}"
+      command: "{{ cf_string }}"
       delegate_to: localhost
       args:
         chdir: scripts
       become: no
       register: configurator_w_support
-      when: vm_vars.nas.open_subtitles_username is defined and vm_vars.nas.open_subtitles_password is defined
       failed_when: "'success' not in configurator_w_support.stdout"
       
-
-    - name: Run configurator
-      command: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p 443 -a {{ vm_vars.api_key }}"
-      delegate_to: localhost
-      args:
-        chdir: scripts
-      become: no
-      register: configurator
-      when: not configurator_w_support.changed
-      failed_when: "'success' not in configurator.stdout"
 
     - name: Enable services
       systemd:

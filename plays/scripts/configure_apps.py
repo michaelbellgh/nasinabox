@@ -1,6 +1,5 @@
-
 import threading
-import requests, json, argparse
+import requests, json, argparse, os
 
 
 import urllib3
@@ -99,6 +98,31 @@ def get_ombi_plex_token(hostname: str, port: int, path: str, plex_username: str,
     response = requests.post(uri, data=json.dumps(json_body), verify=validate_certificates, headers={"content-type" : "application/json"})
     return response.json()['user']['authentication_token']
 
+def post_ombi_plex_token(hostname: str, port: int, path: str, scheme: str="https", validate_certificates: bool=False):
+    fields = {"password": "",
+    "usePlexAdminAccount": True,
+    "username": ""
+    }
+
+    uri = scheme + "://" + hostname + ":" + str(port) + path + "/api/v1/Identity/Wizard/"
+    response = requests.post(uri, data=json.dumps(fields), verify=validate_certificates, headers={"content-type" : "application/json"})
+
+    login_results = response.json()
+    return login_results["result"]
+
+def set_ombi_app_config(hostname: str, port: int, path: str, scheme: str="https", validate_certificates: bool=False):
+    fields = {"applicationName": "Ombi - nasinabox",
+    "applicationUrl": None,
+    "logo": None
+    }
+
+    uri = scheme + "://" + hostname + ":" + str(port) + path + "/api/v2/wizard/config"
+    response = requests.post(uri, data=json.dumps(fields), verify=validate_certificates, headers={"content-type" : "application/json"})
+
+    login_results = response.json()
+    return login_results["applicationName"]
+
+
 def ombi_get_quality_profiles_from_sonarr(ombi: ombi_instance, sonarr_hostname: str, sonarr_port: int, v3: bool, sonarr_api_key: str, ssl: bool, base_url: str):
     fields = {"enabled" : True, "apiKey" : sonarr_api_key, "addOnly" : False, "ip" : sonarr_hostname, "languageProfiles" : 0, "port" : str(sonarr_port), "qualityProfile" : None, "qualityProfileAnime" : None, "rootPath" : None, "rootPathAnime" : None, "seasonFolders" : False, "ssl" : ssl, "subDir" : base_url, "v3" : v3}
     response = ombi_api_request(ombi, "/api/v1/Sonarr/Profiles/", body=json.dumps(fields))
@@ -123,10 +147,54 @@ def ombi_get_lang_profiles_from_sonarr(ombi: ombi_instance, sonarr_hostname: str
         final_names.append((profile['id'], profile['name']))
     return final_names
 
-def ombi_upload_sonarr_profiles(ombi: ombi_instance, sonarr_hostname: str, sonarr_port: int, v3: bool, sonarr_api_key: str, ssl: bool, base_url: str, quality_profile: int, root_dir: int, language_profile: int):
-    fields = {"enabled" : True, "apiKey" : sonarr_api_key, "addOnly" : False, "ip" : sonarr_hostname, "languageProfiles" : language_profile, "port" : str(sonarr_port), "qualityProfile" : quality_profile, "qualityProfileAnime" : quality_profile, "rootPath" : root_dir, "rootPathAnime" : root_dir, "seasonFolders" : True, "ssl" : ssl, "subDir" : base_url, "v3" : v3}
+def ombi_upload_sonarr_profiles(ombi: ombi_instance, sonarr_hostname: str, sonarr_port: int, v3: bool, sonarr_api_key: str, ssl: bool, base_url: str, quality_profile: int, root_dir: int, language_profile: int, language_profile_anime: int):
+    fields = {"enabled" : True, "apiKey" : sonarr_api_key, "addOnly" : False, "ip" : sonarr_hostname, "languageProfile" : language_profile, "languageProfileAnime" : language_profile_anime,"port" : str(sonarr_port), "qualityProfile" : quality_profile, "qualityProfileAnime" : quality_profile, "rootPath" : root_dir, "rootPathAnime" : root_dir, "seasonFolders" : True, "ssl" : ssl, "subDir" : base_url, "v3" : v3}
     response = ombi_api_request(ombi, "/api/v1/Settings/Sonarr", body=json.dumps(fields))
     print(response.text)
+
+def ombi_upload_radarr_profiles(ombi: ombi_instance, radarr_hostname: str, radarr_port: int, radarr_api_key: str, ssl: bool, base_url: str, quality_profile: int, root_dir: str):
+    fields = {"radarr":{"enabled":True,"apiKey":radarr_api_key,"defaultQualityProfile":quality_profile,"defaultRootPath":root_dir,"ssl":ssl,"subDir":base_url,"ip":radarr_hostname,"port":radarr_port,"addOnly":False,"minimumAvailability":"Released","scanForAvailability":False},"radarr4K":{"enabled":False,"apiKey":radarr_api_key,"defaultQualityProfile":0,"defaultRootPath":root_dir,"ssl":ssl,"subDir":None,"ip":radarr_hostname,"port":radarr_port,"addOnly":False,"minimumAvailability":None,"scanForAvailability":False}}
+    response = ombi_api_request(ombi, "/api/v1/Settings/Radarr", body=json.dumps(fields))
+    print(response.text)
+
+def ombi_upload_lidarr_profiles(ombi: ombi_instance, lidarr_hostname: str, lidarr_port: int, lidarr_api_key: str, ssl: bool, base_url: str, root_dir: str):
+    fields = {"enabled":True,"apiKey":lidarr_api_key,"defaultQualityProfile":1,"defaultRootPath": root_dir,"ssl":ssl,"subDir":base_url,"ip":lidarr_hostname,"port": str(lidarr_port),"albumFolder":True,"metadataProfileId":1,"addOnly":False}
+    response = ombi_api_request(ombi, "/api/v1/Settings/Lidarr", body=json.dumps(fields))
+    print(response.text)
+
+
+def ombi_initial_setup_with_plex(hostname: str, port: int, path: str, plex_username: str, plex_password: str, scheme: str="https", validate_certificates: bool=False):
+    login_fields = {"login": plex_username, "password": plex_password}
+    uri = scheme + "://" + hostname + ":" + str(port) + path
+
+    response = requests.get(uri + "/api/v2/Features/", data=json.dumps({"enabled": False, "name": "Movie4KRequests"}), verify=validate_certificates, headers={"content-type" : "application/json"})
+    fields = {"applicationName": None,
+        "applicationUrl": None,
+        "customCss": None,
+        "customDonationMessage": None,
+        "customDonationUrl": None,
+        "enableCustomDonations": False,
+        "favicon": None,
+        "hideAvailableFromDiscover": False,
+        "id": 0,
+        "logo": None,
+        "recentlyAddedPage": False,
+        "useCustomPage": False}
+
+    #Something gets set on the backend when the landing page gets loaded - needed for next steps
+    for url in ["/api/v1/Settings/customization", "/translations/en.json?v=92360805", "/api/v1/Settings/voteenabled", "/api/v1/Settings/issuesenabled", "/api/v1/Settings/LandingPage",
+             "/ombi/api/v1/status/Wizard/", "/api/v1/Settings/Authentication", "/v1/Settings/clientid", "/api/v1/Settings/clientid"]:
+        response = requests.get(uri + url, verify=validate_certificates, headers={"content-type" : "application/json"})
+
+
+    response = requests.post(uri + "/api/v1/Plex/", data=json.dumps(login_fields), verify=validate_certificates, headers={"content-type" : "application/json"})
+    response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"login":"","password":"","usePlexAdminAccount":True}), verify=validate_certificates, headers={"content-type" : "application/json"})
+    response = requests.post(uri + "/api/v2/wizard/config", data=json.dumps({"applicationName":"Ombi - nasinabox","applicationUrl":None,"logo":None}), verify=validate_certificates, headers={"content-type" : "application/json"})
+    response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"username":"admin","password":"admin","usePlexAdminAccount":False}), verify=validate_certificates, headers={"content-type" : "application/json"})
+
+    response = requests.post(uri + "/api/v2/Features/enable", data=json.dumps({"name": "Movie4KRequests", "enabled": False}), verify=validate_certificates, headers={"content-type" : "application/json"})
+    response = requests.post(uri + "/api/v1/Settings/Authentication", data=json.dumps({"allowNoPassword":True,"requiredDigit":None,"requiredLength":0,"requiredLowercase":None,"requireNonAlphanumeric":False,"requireUppercase":False,"enableOAuth":False,"enableHeaderAuth":False,"headerAuthVariable":None}), verify=validate_certificates, headers={"content-type" : "application/json"})
+
 
 
 
@@ -137,7 +205,8 @@ def ombi_upload_sonarr_profiles(ombi: ombi_instance, sonarr_hostname: str, sonar
 ### *darr Methods
 
 class darr_instance:
-    def __init__(self, hostname: str, port: int, path: str, ssl: bool, v3: bool, api_key: str, scheme: str):
+    def __init__(self, name, hostname: str, port: int, path: str, ssl: bool, v3: bool, api_key: str, scheme: str):
+        self.name = name
         self.hostname = hostname
         self.port = port
         self.path = path
@@ -256,32 +325,14 @@ def bazarr_configure_lang_profile(darr: darr_instance, language="en", validate_c
     response = requests.post(url, files=body, headers=headers, verify=validate_certs)
     return response.status_code == 204
 
-def heimdall_add_items(scheme: str, hostname: str, port: int, heimdall_path: str, api_key, validate_certs: bool=False):
-    url = scheme  + "://" + hostname + ":" + str(port) + heimdall_path
 
-    heimdall_session = requests.Session()
-
-    ombi_fields = {
-        "appid": "57b25ceb94bd4c9ba9038ce17656f5ede9007e4c",
-        "title": "Ombi",
-        "colour": "#161b1f",
-        "url": scheme + "://" + hostname + ":" + str(port) + heimdall_path + "/ombi",
-        "tags[]": 0,
-        "icon": "https://appslist.heimdall.site/icons/ombi.png",
-        "appdescription": "Ombi - Media Requests",
-        "config[enabled]": 1,
-        "config[override_url]": scheme + "://" + hostname + ":" + str(port) + heimdall_path + "/ombi",
-        "pinned": 1,
-        "website": None,
-        "config[apikey]": api_key
-    }
-
-
-    response = heimdall_session.post(url + "items", data=ombi_fields, verify=validate_certs)
-    return response.status_code == 200
-
-def make_post_request(url, json_body, headers, verify):
+def make_post_request_indexers(url, json_body, headers, darr_name, verify):
     resp = requests.post(url, json=json_body, headers=headers, verify=verify)
+    if resp.status_code == 400 and "but no results in the configured categories" in resp.text or "unable to connect to indexer" in resp.text:
+        #We should blacklist this indexer
+        file = open("blacklist.txt", "a+")
+        file.writelines([darr_name + ":" + json_body["name"] + "\n"])
+        file.close()
     print(resp)
 
 def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key, jackett_scheme, jackett_hostname: str, jackett_port: int, jackett_path, int_jackett_scheme, int_jackett_hostname, int_jackett_port, int_jackett_path, validate_certs=False, categories=[5030, 5040], api_version="v3"):
@@ -290,6 +341,12 @@ def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key
     
     current_darr_indexers = requests.get(f"{darr.scheme}://{darr.hostname}:" + str(darr.port) + darr.path + "/api/" + api_version + "/indexer", headers={"x-api-key" : darr.api_key}, verify=validate_certs).json()
     darr_indexers = [x["name"] for x in current_darr_indexers]
+
+    blacklisted_sites = None
+    if os.path.exists("blacklist.txt"):
+        #Grab all lines from blacklist.txt which start with darr.name, separated by ':'
+        blacklisted_sites = list(set([x.strip().split(":")[-1] for x in open("blacklist.txt", "r").readlines() if x.strip().split(":")[0] == darr.name]))
+
 
     threads = []
 
@@ -301,6 +358,9 @@ def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key
             continue
         cap_matches = [x["ID"] for x in indexer["caps"] if int(x["ID"]) in categories]
         if len(cap_matches) < 1:
+            continue
+        
+        if blacklisted_sites is not None and indexer["id"] in blacklisted_sites:
             continue
 
         indexer_dict["torznab"] = int_jackett_scheme + "://" + int_jackett_hostname + ":" + str(int_jackett_port) + int_jackett_path + "/api/v2.0/indexers/" + indexer_dict["id"] + "/results/torznab/"
@@ -337,7 +397,7 @@ def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key
 
         url = darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/" + api_version + "/indexer?"
 
-        th = threading.Thread(target=make_post_request, args=(url, body, {"x-api-key" : darr.api_key}, validate_certs,))
+        th = threading.Thread(target=make_post_request_indexers, args=(url, body, {"x-api-key" : darr.api_key}, darr.name, validate_certs,))
         threads.append(th)
         th.start()
 
@@ -356,11 +416,12 @@ def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key
 def configure_all_apps(vars):
 
 
-    sonarr = darr_instance(vars['hostname'], vars['port'], "/sonarr", True, True, vars['apikey'], "https")
-    lidarr = darr_instance(vars['hostname'], vars['port'], "/lidarr", True, True, vars['apikey'], "https")
-    radarr = darr_instance(vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], "https")
-    bazarr = darr_instance(vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], "https")
-    readarr = darr_instance(vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], "https")
+
+    sonarr = darr_instance("sonarr", vars['hostname'], vars['port'], "/sonarr", True, True, vars['apikey'], "https")
+    lidarr = darr_instance("lidarr", vars['hostname'], vars['port'], "/lidarr", True, True, vars['apikey'], "https")
+    radarr = darr_instance("radarr", vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], "https")
+    bazarr = darr_instance("bazarr", vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], "https")
+    readarr = darr_instance("readarr", vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], "https")
 
     
     darr_add_download_client(sonarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
@@ -370,7 +431,7 @@ def configure_all_apps(vars):
 
     darr_add_root_folder(sonarr, "/tv/", "/tv/")
     darr_add_root_folder(lidarr, "/music/", "/music/", api_version="v1", additional_fields={"defaultMetadataProfileId": "1", "defaultQualityProfileId": "1", "defaultTags": []})
-    darr_add_root_folder(radarr, "/movies", "/movies/", api_version="v1")
+    darr_add_root_folder(radarr, "/movies", "/movies")
     darr_add_root_folder(readarr, "/books/", "/books/", additional_fields={"defaultMetadataProfileId": "1", "defaultQualityProfileId": "1", "defaultTags": [], "host": "localhost", "isCalibreLibrary": False, "outputProfile": "default", "port": 8080, "useSsl": False}, api_version="v1")
 
     bazarr_configure_english_providers(bazarr, vars['open_subtitles_username'], vars['open_subtitles_password'])
@@ -378,10 +439,21 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
+    ombi = ombi_instance(vars["hostname"], 443, "/ombi", vars["apikey"], "https")
+    if "plex_username" in vars and "plex_password" in vars:
+        ombi_initial_setup_with_plex(vars["hostname"], 443, "/ombi", vars["plex_username"], vars["plex_password"], "https")
+    ombi_upload_sonarr_profiles(ombi, "sonarr", 8989, True, vars["apikey"], False, "/sonarr", 4, 1, 1, 1)
+    ombi_upload_radarr_profiles(ombi, "radarr", "7878", vars["apikey"], False, "/radarr", 4, "/movies")
+    ombi_upload_lidarr_profiles(ombi, "lidarr", "8686", vars["apikey"], False, "/lidarr", "/music/")
+
     darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
     darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
     darr_add_all_configured_jacket_indexers(readarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[3030, 7020, 8010], api_version="v1")
     darr_add_all_configured_jacket_indexers(lidarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[3000,3010,3020,3030,3040], api_version="v1")
+
+   
+
+    
 
 
 
@@ -394,6 +466,8 @@ def main():
     parser.add_argument("-a", "--apikey", required=True, help="IP Address of the *arr clients")
     parser.add_argument("--open-subtitles-username", help="OpenSubtitles.org/.com username")
     parser.add_argument("--open-subtitles-password", help="OpenSubtitles.org/.com password")
+    parser.add_argument("--plex-username", help="Plex username")
+    parser.add_argument("--plex-password", help="Plex password")
     args = vars(parser.parse_args())
 
     configure_all_apps(args)
