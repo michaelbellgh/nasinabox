@@ -15,9 +15,74 @@
       set_fact:
         ansible_ssh_extra_args: '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
 
+    - name: Setup netplan
+      copy:
+        dest: "/etc/netplan/static.yaml"
+        content: |
+          network:
+            renderer: networkd
+            version: 2
+            ethernets:
+              ens192:
+                dhcp4: no
+                dhcp6: no
+                addresses: [192.168.2.50/24,]
+              ens224:
+                dhcp4: no
+                dhcp6: no
+                addresses: [192.168.8.50/24,]
+                gateway4: 192.168.8.254
+                nameservers:
+                  search: [home.den]
+                  addresses: [192.168.10.45, 1.1.1.1]
+        mode: '0744'
+      register: netplan_setup
+
+    - name: Delete old netplan
+      file:
+        path: /etc/netplan/00-installer-config.yaml
+        state: absent
+
+      
+    - name: Netplan apply
+      command: netplan apply
+      become: yes
+      async: 100
+      poll: 0
+      when: netplan_setup.changed
+
+
     - name: Re-acquire facts
       setup:
-   
+
+    - name: Set systemd-resolved DNS
+      lineinfile:
+        path: /etc/systemd/resolved.conf
+        line: "DNS=192.168.10.45 8.8.8.8 1.1.1.1"
+      become: yes
+      register: systemd_resolved
+
+    - name: Reload systemd-resolved
+      systemd:
+        state: restarted
+        name: systemd-resolved
+      become: yes
+      when: systemd_resolved.changed
+
+    - name: Re-acquire facts
+      setup:
+
+    - name: create macvlan DMZ
+      docker_network:
+        name: docker_dmz
+        driver: macvlan
+        driver_options:
+          parent: ens224
+        ipam_config:
+          - subnet: "192.168.8.0/24"
+            gateway: "192.168.8.254"
+            iprange: "192.168.8.0/24"
+
     - name: Make required host directories
       file:
         path: "{{ item }}"
@@ -27,6 +92,7 @@
        - "/home/docker/docker_data/traefik/"
        - "/var/www/ssl"
        - "/home/docker/docker_data/jackett/config/Jackett/"
+       - "/opt/pan_le_import/"
 
     - name: Set system settings
       lineinfile:
@@ -87,8 +153,35 @@
           - parted
           - sqlite
           - open-vm-tools
+          - zfsutils-linux
         state: present
       become: yes
+
+    - name: Get zpool info
+      command: "zfs list"
+      register: zfacts
+      
+    - name: Try import NAS pool
+      command: "zpool import NAS -f"
+      when: '"/mnt/Storage" not in zfacts.stdout'
+      register: try_import
+      ignore_errors: yes
+                                                                                     
+    - name: Get ZFS pools
+      command: "zfs list"
+      register: zfs_pools                     
+                                                                                     
+    - name: Make ZFS pool
+      command: "zpool create NAS raidz {{ zfs_list }}"
+      when: '"/mnt/Storage" not in zfs_pools.stdout and force is not defined'                                                            
+
+    - name: Make ZFS pool (force)
+      command: "zpool create NAS raidz {{ zfs_list }} -f"
+      when: '"/mnt/Storage" not in zfs_pools.stdout and force is defined'
+
+
+    - name: Mount ZFS pool
+      command: "zfs set mountpoint=/mnt/Storage NAS"
 
     - name: Upgrade pip for python3
       pip:
@@ -106,7 +199,7 @@
       openssl_csr:
         path: /tmp/root.csr
         privatekey_path: "{{ root_key.filename }}"
-        common_name: "nasinabox"
+        common_name: "nas.dennetwork.xyz"
       register: root_csr
       when: root_key.changed
 
@@ -285,7 +378,7 @@
         image: linuxserver/deluge
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.deluge.rule": "PathPrefix(`/deluge`)"
+          "traefik.http.routers.deluge.rule": "Host(`deluge.dennetwork.xyz`)"
           "traefik.http.routers.deluge.entrypoints": "https"
           "traefik.http.routers.deluge.tls.certresolver": "letsencrypt"
           "traefik.http.services.deluge.loadbalancer.server.port": "8112"
@@ -301,7 +394,8 @@
          PUID: "1001"
          PGID: "1001"
         networks:
-         - name: docker
+         - name: docker_dmz
+           ipv4_address: 192.168.8.71
         volumes:
         - /home/docker/docker_data/deluge/config:/config
         - /mnt/Storage/Downloads:/downloads
@@ -335,7 +429,7 @@
         image: linuxserver/jackett
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.jackett.rule": "PathPrefix(`/jackett`)"
+          "traefik.http.routers.jackett.rule": "Host(`jackett.dennetwork.xyz`)"
           "traefik.http.routers.jackett.entrypoints": "https"
           "traefik.http.routers.jackett.tls.certresolver": "letsencrypt"
           "traefik.http.services.jackett.loadbalancer.server.port": "9117"
@@ -350,7 +444,7 @@
          PUID: "1001"
          PGID: "1001"
         networks:
-        - name: docker
+         - name: docker_dmz
         volumes:
         - /home/docker/docker_data/jackett/config:/config
         - /var/www/ssl/:/ssl
@@ -368,7 +462,7 @@
          PGID: "1001"
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.lidarr.rule": "PathPrefix(`/lidarr`)"
+          "traefik.http.routers.lidarr.rule": "Host(`lidarr.dennetwork.xyz`)"
           "traefik.http.routers.lidarr.entrypoints": "https"
           "traefik.http.routers.lidarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.lidarr.loadbalancer.server.port": "8686"
@@ -378,7 +472,7 @@
           "traefik.http.routers.http_catchall.entrypoints": "http"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
-        - name: "docker"
+         - name: docker_dmz
           links: ["jackett", "deluge"]
         volumes:
         - /home/docker/docker_data/lidarr/config:/config
@@ -395,7 +489,7 @@
         image: linuxserver/radarr:nightly
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.radarr.rule": "PathPrefix(`/radarr`)"
+          "traefik.http.routers.radarr.rule": "Host(`radarr.dennetwork.xyz`)"
           "traefik.http.routers.radarr.entrypoints": "https"
           "traefik.http.routers.radarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.radarr.loadbalancer.server.port": "7878"
@@ -409,7 +503,7 @@
          PUID: "1001"
          PGID: "1001"
         networks:
-        - name: "docker"
+         - name: docker_dmz
           links: ["deluge", "jackett"]
         volumes:
         - /home/docker/docker_data/radarr/config:/config
@@ -430,12 +524,12 @@
          PGID: "1001"
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.sonarr.rule": "PathPrefix(`/sonarr`)"
+          "traefik.http.routers.sonarr.rule": "Host(`sonarr.dennetwork.xyz`)"
           "traefik.http.routers.sonarr.entrypoints": "https"
           "traefik.http.routers.sonarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.sonarr.loadbalancer.server.port": "8989"
         networks:
-        - name: "docker"
+         - name: docker_dmz
           links: ["jackett", "deluge"]
         volumes:
         - /home/docker/docker_data/sonarr/config:/config
@@ -457,7 +551,7 @@
          PGID: "1001"
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.ombi.rule": "PathPrefix(`/ombi`)"
+          "traefik.http.routers.ombi.rule": "Host(`ombi.dennetwork.xyz`)"
           "traefik.http.routers.ombi.entrypoints": "https"
           "traefik.http.routers.ombi.tls.certresolver": "letsencrypt"
           "traefik.http.services.ombi.loadbalancer.server.port": "3579"
@@ -468,7 +562,7 @@
           "traefik.http.routers.http_catchall.entrypoints": "http"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
-        - name: "docker"
+         - name: docker_dmz
           links: ["sonarr", "radarr", "ombi"]
         volumes:
         - /home/docker/docker_data/ombi/config:/config
@@ -489,7 +583,7 @@
         published_ports: ["6767:6767"]
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.bazarr.rule": "PathPrefix(`/bazarr`)"
+          "traefik.http.routers.bazarr.rule": "Host(`bazarr.dennetwork.xyz`)"
           "traefik.http.routers.bazarr.entrypoints": "https"
           "traefik.http.routers.bazarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.bazarr.loadbalancer.server.port": "6767"
@@ -499,7 +593,7 @@
           "traefik.http.routers.http_catchall.entrypoints": "http"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
-        - name: "docker"
+         - name: docker_dmz
           links: ["sonarr", "radarr"]
         volumes:
         - /home/docker/docker_data/bazarr/config:/config
@@ -520,7 +614,7 @@
          PGID: "1001"
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.readarr.rule": "PathPrefix(`/readarr`)"
+          "traefik.http.routers.readarr.rule": "Host(`readarr.dennetwork.xyz`)"
           "traefik.http.routers.readarr.entrypoints": "https"
           "traefik.http.routers.readarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.readarr.loadbalancer.server.port": "8787"
@@ -535,7 +629,7 @@
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         networks:
-        - name: "docker"
+         - name: docker_dmz
           links: ["jackett", "deluge"]
         purge_networks: yes
       register: docker_readarr
@@ -562,7 +656,7 @@
           "traefik.http.routers.http_catchall.entrypoints": "http"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"  
         networks:
-         - name: docker
+         - name: docker_dmz
         restart_policy: unless-stopped
         purge_networks: yes
       register: docker_homer
@@ -596,6 +690,28 @@
         purge_networks: yes
 
 
+    - name: Start deemix
+      docker_container:
+        name: deemix
+        image: registry.gitlab.com/bockiii/deemix-docker
+        volumes:
+        - /mnt/Storage/Music/MP3:/downloads
+        - /home/docker/docker_data/deemix/config:/config
+        - /var/www/ssl/:/ssl
+        networks:
+        - name: "docker_dmz"
+        purge_networks: yes
+        labels:
+           "traefik.enable": "true"
+           "traefik.http.routers.deemix.rule": "Host(`deemix.dennetwork.xyz`)"
+           "traefik.http.routers.deemix.entrypoints": "https"
+           "traefik.http.routers.deemix.tls.certresolver": "letsencrypt"
+           "traefik.http.services.deemix.loadbalancer.server.port": "6595"
+           "traefik.http.routers.http-catchall.rule": "hostregexp(`{host:[a-z-.]+}`)"
+           "traefik.http.routers.http-catchall.entrypoints": "http"
+           "traefik.http.routers.http-catchall.middlewares": "redirect-to-https"
+           "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme": "https"
+        restart_policy: unless-stopped
 
 
     - name: Run traefik
@@ -604,7 +720,7 @@
         recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_readarr.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
         labels: 
           "traefik.enable": "true"
-          "traefik.http.routers.api.rule": "PathPrefix(`/traefik`)"
+          "traefik.http.routers.api.rule": "Host(`traefik.dennetwork.xyz`)"
           "traefik.http.routers.api.entrypoints": "https,http"
           "traefik.http.routers.api.service": "dashboard@internal"
           "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
@@ -857,7 +973,7 @@
 
     - name: Set configurator fact base
       set_fact:
-        cf_string: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p 443 -a {{ vm_vars.api_key }}"
+        cf_string: "python3 configure_apps.py -i dennetwork.xyz -p 443 -a {{ vm_vars.api_key }}"
 
     - name: Add optional vars
       set_fact: 

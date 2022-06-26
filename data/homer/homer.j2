@@ -42,7 +42,7 @@ colors:
 
 # Optional message
 message:
-  url: github.com/michaelbellgh/{{ vm_vars.vminfo.hostname }}.local
+  url: github.com/michaelbellgh/nasinabox
   style: "is-dark" # See https://bulma.io/documentation/components/message/#colors for styling options.
   title: "NAS In A Box"
   icon: "fa fa-grin"
@@ -76,7 +76,14 @@ services:
         subtitle: "Plex Media Server"
         tag: "app"
         keywords: "plex media movie tv"
-        url: "http://{{ vm_vars.vminfo.hostname }}.local:32400/web/"
+        url: "http://nas.local:32400/web/"
+        target: "_blank" # optional html a tag target attribute
+      - name: "DenNetwork radio"
+        logo: "assets/icons/radio.png"
+        subtitle: "DenNetwork Radio"
+        tag: "app"
+        keywords: media radio music"
+        url: "http://radio.dennetwork.xyz"
         target: "_blank" # optional html a tag target attribute
   - name: "Downloaders"
     icon: "fas fa-cloud"
@@ -86,49 +93,56 @@ services:
         subtitle: "Browse TV, Movies to download"
         tag: "app"
         keywords: "media tv series movie"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/ombi"
+        url: "https://ombi.dennetwork.xyz"
         target: "_blank" # optional html a tag target attribute
       - name: "Sonarr"
         logo: "assets/icons/sonarr.png"
         subtitle: "Downloads TV Series"
         tag: "app"
         keywords: "media tv series"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/sonarr"
+        url: "https://sonarr.dennetwork.xyz"
         target: "_blank" # optional html a tag target attribute
       - name: "Radarr"
         logo: "assets/icons/radarr.png"
         subtitle: "Downloads movies"
         tag: "app"
         keywords: "media tv series"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/radarr"
+        url: "https://radarr.dennetwork.xyz"
         target: "_blank" # optional html a tag target attribute
       - name: "Lidarr"
         logo: "assets/icons/lidarr.png"
         subtitle: "Downloads music albums"
         tag: "app"
         keywords: "media music mp3"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/lidarr"
+        url: "https://lidarr.dennetwork.xyz"
         target: "_blank" # optional html a tag target attribute
       - name: "Bazarr"
         logo: "assets/icons/bazarr.png"
         subtitle: "Downloads subtitles for TV shows, movies"
         tag: "app"
         keywords: "media tv movie subtitles"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/bazarr"
+        url: "https://bazarr.dennetwork.xyz"
         target: "_blank" # optional html a tag target attribute
       - name: "Jackett"
         logo: "assets/icons/jackett.png"
         subtitle: "Helps find downloads for TV shows, movies"
         tag: "app"
         keywords: "media tv movie torrent"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/jackett"
+        url: "https://jackett.dennetwork.xyz"
         target: "_blank" # optional html a tag target attribute
       - name: "Readarr"
         logo: "assets/icons/readarr.png"
         subtitle: "Downloads books"
         tag: "app"
         keywords: "media book ebook"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/readarr"
+        url: "https://readarr.dennetwork.xyz"
+        target: "_blank" # optional html a tag target attribute
+      - name: "Deemix"
+        logo: "assets/icons/deemix.png"
+        subtitle: "Downloads songs from Deezer"
+        tag: "app"
+        keywords: "media book ebook"
+        url: "https://deemix.dennetwork.xyz"
         target: "_blank" # optional html a tag target attribute
   - name: "Torrents"
     icon: "fas fa-cloud"
@@ -138,5 +152,36 @@ services:
         subtitle: "Deluge"
         tag: "app"
         keywords: "plex media movie tv"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/deluge"
+        url: "https://deluge.dennetwork.xyz"
+        target: "_blank" # optional html a tag target attribute
+  - name: "Other"
+    icon: "fas fa-cloud"
+    items:
+      - name: "DenNetwork VPN"
+        logo: "assets/icons/vpn.png"
+        subtitle: "DenNetwork GlobalProtect"
+        tag: "app"
+        keywords: "vpn other"
+        url: "https://vpn.dennetwork.xyz:8443"
+        target: "_blank" # optional html a tag target attribute
+      - name: "ESXi"
+        logo: "assets/icons/esxi.png"
+        subtitle: "DenNetwork ESXi"
+        tag: "app"
+        keywords: "esxi"
+        url: "https://192.168.10.70"
+        target: "_blank" # optional html a tag target attribute
+      - name: "Palo Alto FW"
+        logo: "assets/icons/palo.png"
+        subtitle: "DenNetwork PaloAlto FW"
+        tag: "app"
+        keywords: "fw"
+        url: "https://palo.home.den"
+        target: "_blank" # optional html a tag target attribute
+      - name: "EVE-NG"
+        logo: "assets/icons/eve.png"
+        subtitle: "eve-ng"
+        tag: "app"
+        keywords: "other"
+        url: "http://eve.home.den"
         target: "_blank" # optional html a tag target attribute

@@ -111,7 +111,7 @@ def post_ombi_plex_token(hostname: str, port: int, path: str, scheme: str="https
     return login_results["result"]
 
 def set_ombi_app_config(hostname: str, port: int, path: str, scheme: str="https", validate_certificates: bool=False):
-    fields = {"applicationName": "Ombi - nasinabox",
+    fields = {"applicationName": "Ombi - DenNetwork",
     "applicationUrl": None,
     "logo": None
     }
@@ -183,13 +183,13 @@ def ombi_initial_setup_with_plex(hostname: str, port: int, path: str, plex_usern
 
     #Something gets set on the backend when the landing page gets loaded - needed for next steps
     for url in ["/api/v1/Settings/customization", "/translations/en.json?v=92360805", "/api/v1/Settings/voteenabled", "/api/v1/Settings/issuesenabled", "/api/v1/Settings/LandingPage",
-             "/ombi/api/v1/status/Wizard/", "/api/v1/Settings/Authentication", "/v1/Settings/clientid", "/api/v1/Settings/clientid"]:
+             "/api/v1/status/Wizard/", "/api/v1/Settings/Authentication", "/v1/Settings/clientid", "/api/v1/Settings/clientid"]:
         response = requests.get(uri + url, verify=validate_certificates, headers={"content-type" : "application/json"})
 
 
     response = requests.post(uri + "/api/v1/Plex/", data=json.dumps(login_fields), verify=validate_certificates, headers={"content-type" : "application/json"})
     response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"login":"","password":"","usePlexAdminAccount":True}), verify=validate_certificates, headers={"content-type" : "application/json"})
-    response = requests.post(uri + "/api/v2/wizard/config", data=json.dumps({"applicationName":"Ombi - nasinabox","applicationUrl":None,"logo":None}), verify=validate_certificates, headers={"content-type" : "application/json"})
+    response = requests.post(uri + "/api/v2/wizard/config", data=json.dumps({"applicationName":"Ombi - DenNetwork","applicationUrl":None,"logo":None}), verify=validate_certificates, headers={"content-type" : "application/json"})
     response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"username":"admin","password":"admin","usePlexAdminAccount":False}), verify=validate_certificates, headers={"content-type" : "application/json"})
 
     response = requests.post(uri + "/api/v2/Features/enable", data=json.dumps({"name": "Movie4KRequests", "enabled": False}), verify=validate_certificates, headers={"content-type" : "application/json"})
@@ -417,17 +417,17 @@ def configure_all_apps(vars):
 
 
 
-    sonarr = darr_instance("sonarr", vars['hostname'], vars['port'], "/sonarr", True, True, vars['apikey'], "https")
-    lidarr = darr_instance("lidarr", vars['hostname'], vars['port'], "/lidarr", True, True, vars['apikey'], "https")
-    radarr = darr_instance("radarr", vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], "https")
-    bazarr = darr_instance("bazarr", vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], "https")
-    readarr = darr_instance("readarr", vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], "https")
+    sonarr = darr_instance("sonarr", "sonarr" + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
+    lidarr = darr_instance("lidarr", "lidarr" + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
+    radarr = darr_instance("radarr", "radarr" + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
+    bazarr = darr_instance("bazarr", "bazarr" + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
+    readarr = darr_instance("readarr", "readarr" + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
 
     
-    darr_add_download_client(sonarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
-    darr_add_download_client(lidarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge", api_version="v1")
-    darr_add_download_client(radarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
-    darr_add_download_client(readarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge", api_version="v1")
+    darr_add_download_client(sonarr, "Deluge", "deluge", 8112, "", None ,"deluge", implementation="Deluge")
+    darr_add_download_client(lidarr, "Deluge", "deluge", 8112, "", None ,"deluge", implementation="Deluge", api_version="v1")
+    darr_add_download_client(radarr, "Deluge", "deluge", 8112, "", None ,"deluge", implementation="Deluge")
+    darr_add_download_client(readarr, "Deluge", "deluge", 8112, "", None ,"deluge", implementation="Deluge", api_version="v1")
 
     darr_add_root_folder(sonarr, "/tv/", "/tv/")
     darr_add_root_folder(lidarr, "/music/", "/music/", api_version="v1", additional_fields={"defaultMetadataProfileId": "1", "defaultQualityProfileId": "1", "defaultTags": []})
@@ -439,17 +439,17 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
-    ombi = ombi_instance(vars["hostname"], 443, "/ombi", vars["apikey"], "https")
+    ombi = ombi_instance(vars["hostname"], 443, "", vars["apikey"], "https")
     if "plex_username" in vars and "plex_password" in vars:
-        ombi_initial_setup_with_plex(vars["hostname"], 443, "/ombi", vars["plex_username"], vars["plex_password"], "https")
-    ombi_upload_sonarr_profiles(ombi, "sonarr", 8989, True, vars["apikey"], False, "/sonarr", 4, 1, 1, 1)
-    ombi_upload_radarr_profiles(ombi, "radarr", "7878", vars["apikey"], False, "/radarr", 4, "/movies")
-    ombi_upload_lidarr_profiles(ombi, "lidarr", "8686", vars["apikey"], False, "/lidarr", "/music/")
+        ombi_initial_setup_with_plex(vars["hostname"], 443, "", vars["plex_username"], vars["plex_password"], "https")
+    ombi_upload_sonarr_profiles(ombi, "sonarr", 8989, True, vars["apikey"], False, "", 4, 1, 1, 1)
+    ombi_upload_radarr_profiles(ombi, "radarr", "7878", vars["apikey"], False, "", 4, "/movies")
+    ombi_upload_lidarr_profiles(ombi, "lidarr", "8686", vars["apikey"], False, "", "/music/")
 
-    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
-    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
-    darr_add_all_configured_jacket_indexers(readarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[3030, 7020, 8010], api_version="v1")
-    darr_add_all_configured_jacket_indexers(lidarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[3000,3010,3020,3030,3040], api_version="v1")
+    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", "sonarr" + vars["hostname"], 443, "", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
+    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", "radarr" + vars["hostname"], 443, "", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
+    darr_add_all_configured_jacket_indexers(readarr, vars["apikey"],"https", "readarr" + vars["hostname"], 443, "", "http", "jackett", 9117, "", categories=[3030, 7020, 8010], api_version="v1")
+    darr_add_all_configured_jacket_indexers(lidarr, vars["apikey"],"https", "lidarr" + vars["hostname"], 443, "", "http", "jackett", 9117, "",categories=[3000,3010,3020,3030,3040], api_version="v1")
 
    
 

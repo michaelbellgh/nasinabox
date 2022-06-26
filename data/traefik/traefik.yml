@@ -17,7 +17,7 @@ providers:
     network: docker
     swarmModeRefreshSeconds: 15s
   file:
-    filename: certs.yml
+    filename: file.yml
 api:
   dashboard: true
   insecure: true
@@ -27,3 +27,11 @@ log:
   format: common
 
 
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: michael.bell19282@gmail.com
+      storage: acme.json
+      httpChallenge:
+        # used during the challenge
+        entryPoint: http

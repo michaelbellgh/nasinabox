@@ -9,3 +9,29 @@ tls:
       defaultCertificate:
         certFile: /webca.crt
         keyFile: /webca.pem
+http:
+  routers:
+    radio:
+      entryPoints:
+      - https
+      - http
+      rule: Host(`radio.dennetwork.xyz`)
+      service: radio
+      tls:
+        certResolver: letsencrypt
+    vpn:
+      service: globalprotect
+      rule: Host(`vpn.dennetwork.xyz`)
+      tls:
+        certResolver: letsencrypt
+      entrypoints:
+      - https
+  services:
+    globalprotect:
+      loadBalancer:
+        servers:
+          - url: https://192.168.8.111
+    radio:
+      loadBalancer:
+        servers:
+        - url: http://192.168.8.85:80
