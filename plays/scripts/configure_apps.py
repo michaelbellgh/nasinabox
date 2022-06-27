@@ -417,11 +417,11 @@ def configure_all_apps(vars):
 
 
 
-    sonarr = darr_instance("sonarr", "sonarr" + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
-    lidarr = darr_instance("lidarr", "lidarr" + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
-    radarr = darr_instance("radarr", "radarr" + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
-    bazarr = darr_instance("bazarr", "bazarr" + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
-    readarr = darr_instance("readarr", "readarr" + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
+    sonarr = darr_instance("sonarr", "sonarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
+    lidarr = darr_instance("lidarr", "lidarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
+    radarr = darr_instance("radarr", "radarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
+    bazarr = darr_instance("bazarr", "bazarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
+    readarr = darr_instance("readarr", "readarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
 
     
     darr_add_download_client(sonarr, "Deluge", "deluge", 8112, "", None ,"deluge", implementation="Deluge")
@@ -439,17 +439,17 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
-    ombi = ombi_instance(vars["hostname"], 443, "", vars["apikey"], "https")
+    ombi = ombi_instance("ombi." + vars["hostname"], 443, "", vars["apikey"], "https")
     if "plex_username" in vars and "plex_password" in vars:
-        ombi_initial_setup_with_plex(vars["hostname"], 443, "", vars["plex_username"], vars["plex_password"], "https")
+        ombi_initial_setup_with_plex("ombi." + vars["hostname"], 443, "", vars["plex_username"], vars["plex_password"], "https")
     ombi_upload_sonarr_profiles(ombi, "sonarr", 8989, True, vars["apikey"], False, "", 4, 1, 1, 1)
     ombi_upload_radarr_profiles(ombi, "radarr", "7878", vars["apikey"], False, "", 4, "/movies")
     ombi_upload_lidarr_profiles(ombi, "lidarr", "8686", vars["apikey"], False, "", "/music/")
 
-    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", "sonarr" + vars["hostname"], 443, "", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
-    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", "radarr" + vars["hostname"], 443, "", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
-    darr_add_all_configured_jacket_indexers(readarr, vars["apikey"],"https", "readarr" + vars["hostname"], 443, "", "http", "jackett", 9117, "", categories=[3030, 7020, 8010], api_version="v1")
-    darr_add_all_configured_jacket_indexers(lidarr, vars["apikey"],"https", "lidarr" + vars["hostname"], 443, "", "http", "jackett", 9117, "",categories=[3000,3010,3020,3030,3040], api_version="v1")
+    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", "jackett.dennetwork.xyz", 443, "", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
+    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", "jackett.dennetwork.xyz", 443, "", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
+    darr_add_all_configured_jacket_indexers(readarr, vars["apikey"],"https", "jackett.dennetwork.xyz", 443, "", "http", "jackett", 9117, "", categories=[3030, 7020, 8010], api_version="v1")
+    darr_add_all_configured_jacket_indexers(lidarr, vars["apikey"],"https", "jackett.dennetwork.xyz", 443, "", "http", "jackett", 9117, "",categories=[3000,3010,3020,3030,3040], api_version="v1")
 
    
 

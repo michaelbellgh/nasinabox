@@ -72,16 +72,6 @@
     - name: Re-acquire facts
       setup:
 
-    - name: create macvlan DMZ
-      docker_network:
-        name: docker_dmz
-        driver: macvlan
-        driver_options:
-          parent: ens224
-        ipam_config:
-          - subnet: "192.168.8.0/24"
-            gateway: "192.168.8.254"
-            iprange: "192.168.8.0/24"
 
     - name: Make required host directories
       file:
@@ -154,8 +144,31 @@
           - sqlite
           - open-vm-tools
           - zfsutils-linux
+          - python3-docker
+          - cron
         state: present
       become: yes
+
+    - name: create macvlan DMZ
+      docker_network:
+        name: docker_dmz
+        driver: macvlan
+        driver_options:
+          parent: ens224
+        ipam_config:
+          - subnet: "192.168.8.0/24"
+            gateway: "192.168.8.254"
+            iprange: "192.168.8.0/24"
+    
+    - name: create macvlan Trust
+      docker_network:
+        name: docker_trust
+        driver: macvlan
+        driver_options:
+          parent: ens192
+        ipam_config:
+          - subnet: "192.168.2.0/24"
+            iprange: "192.168.2.0/24"
 
     - name: Get zpool info
       command: "zfs list"
@@ -263,8 +276,9 @@
       become: yes
       with_items:
        - { src: "../data/traefik/traefik.yml", dest: "/home/docker/docker_data/traefik/traefik.yml", force: yes}
-       - { src: "../data/traefik/certs.yml", dest: "/home/docker/docker_data/traefik/certs.yml" , force: yes}
+       - { src: "../data/traefik/file.yml", dest: "/home/docker/docker_data/traefik/file.yml" , force: yes}
        - { src: "../data/homer/icons/", dest: "/home/docker/docker_data/homer/icons/", force: yes}
+       - { src: "../data/panle/credentials.py", dest: "/opt/pan_le_import/credentials.py", force: yes}
 
     - name: Set permissions for ACME
       file:
@@ -379,7 +393,7 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.deluge.rule": "Host(`deluge.dennetwork.xyz`)"
-          "traefik.http.routers.deluge.entrypoints": "https"
+          "traefik.http.routers.deluge.entrypoints": "https,http"
           "traefik.http.routers.deluge.tls.certresolver": "letsencrypt"
           "traefik.http.services.deluge.loadbalancer.server.port": "8112"
           "traefik.http.routers.deluge.middlewares": "deluge-stripprefix@docker"
@@ -409,6 +423,7 @@
     - name: Start plex
       docker_container:
         name: plex
+        ports: ["443:32400", "32400:32400", "1900:1900", "5353:5353", "8324:8324", "32410:32410", "32412:32412", "32413:32413", "32414:32414","32469:32469"]
         image: linuxserver/plex
         env: 
          VERSION: latest
@@ -421,7 +436,9 @@
         - /mnt/Storage/TV:/tv
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
+        purge_networks: yes
       register: docker_plex
+    
 
     - name: Start jackett
       docker_container:
@@ -430,7 +447,7 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.jackett.rule": "Host(`jackett.dennetwork.xyz`)"
-          "traefik.http.routers.jackett.entrypoints": "https"
+          "traefik.http.routers.jackett.entrypoints": "https,http"
           "traefik.http.routers.jackett.tls.certresolver": "letsencrypt"
           "traefik.http.services.jackett.loadbalancer.server.port": "9117"
           "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
@@ -463,7 +480,7 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.lidarr.rule": "Host(`lidarr.dennetwork.xyz`)"
-          "traefik.http.routers.lidarr.entrypoints": "https"
+          "traefik.http.routers.lidarr.entrypoints": "https,http"
           "traefik.http.routers.lidarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.lidarr.loadbalancer.server.port": "8686"
           "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
@@ -473,7 +490,7 @@
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
          - name: docker_dmz
-          links: ["jackett", "deluge"]
+           links: ["jackett", "deluge"]
         volumes:
         - /home/docker/docker_data/lidarr/config:/config
         - /mnt/Storage/Music:/music
@@ -490,7 +507,7 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.radarr.rule": "Host(`radarr.dennetwork.xyz`)"
-          "traefik.http.routers.radarr.entrypoints": "https"
+          "traefik.http.routers.radarr.entrypoints": "https,http"
           "traefik.http.routers.radarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.radarr.loadbalancer.server.port": "7878"
           "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
@@ -504,7 +521,7 @@
          PGID: "1001"
         networks:
          - name: docker_dmz
-          links: ["deluge", "jackett"]
+           links: ["deluge", "jackett"]
         volumes:
         - /home/docker/docker_data/radarr/config:/config
         - /mnt/Storage/Movies:/movies
@@ -525,12 +542,12 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.sonarr.rule": "Host(`sonarr.dennetwork.xyz`)"
-          "traefik.http.routers.sonarr.entrypoints": "https"
+          "traefik.http.routers.sonarr.entrypoints": "https,http"
           "traefik.http.routers.sonarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.sonarr.loadbalancer.server.port": "8989"
         networks:
          - name: docker_dmz
-          links: ["jackett", "deluge"]
+           links: ["jackett", "deluge"]
         volumes:
         - /home/docker/docker_data/sonarr/config:/config
         - /mnt/Storage/TV:/tv
@@ -552,7 +569,7 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.ombi.rule": "Host(`ombi.dennetwork.xyz`)"
-          "traefik.http.routers.ombi.entrypoints": "https"
+          "traefik.http.routers.ombi.entrypoints": "https,http"
           "traefik.http.routers.ombi.tls.certresolver": "letsencrypt"
           "traefik.http.services.ombi.loadbalancer.server.port": "3579"
           "traefik.http.middlewares.protoheader.headers.customrequestheaders.X-Forwarded-Proto": "https"
@@ -563,7 +580,7 @@
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
          - name: docker_dmz
-          links: ["sonarr", "radarr", "ombi"]
+           links: ["sonarr", "radarr", "ombi", "plex"]
         volumes:
         - /home/docker/docker_data/ombi/config:/config
         - "/var/www/ssl/:/ssl"
@@ -584,7 +601,7 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.bazarr.rule": "Host(`bazarr.dennetwork.xyz`)"
-          "traefik.http.routers.bazarr.entrypoints": "https"
+          "traefik.http.routers.bazarr.entrypoints": "https,http"
           "traefik.http.routers.bazarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.bazarr.loadbalancer.server.port": "6767"
           "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
@@ -594,7 +611,7 @@
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
          - name: docker_dmz
-          links: ["sonarr", "radarr"]
+           links: ["sonarr", "radarr"]
         volumes:
         - /home/docker/docker_data/bazarr/config:/config
         - /mnt/Storage/Movies:/movies
@@ -615,7 +632,7 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.readarr.rule": "Host(`readarr.dennetwork.xyz`)"
-          "traefik.http.routers.readarr.entrypoints": "https"
+          "traefik.http.routers.readarr.entrypoints": "https,http"
           "traefik.http.routers.readarr.tls.certresolver": "letsencrypt"
           "traefik.http.services.readarr.loadbalancer.server.port": "8787"
           "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
@@ -630,7 +647,7 @@
         restart_policy: unless-stopped
         networks:
          - name: docker_dmz
-          links: ["jackett", "deluge"]
+           links: ["jackett", "deluge"]
         purge_networks: yes
       register: docker_readarr
 
@@ -646,9 +663,10 @@
         - /home/docker/docker_data/homer:/www/assets
         labels:
           "traefik.enable": "true"
-          "traefik.http.routers.homer.rule": "PathPrefix(`/`)"
+          "traefik.http.routers.homer.rule": "PathPrefix(`/`) && Host(`nas.dennetwork.xyz`)"
           "traefik.http.routers.homer.tls": "true"
-          "traefik.http.routers.homer.entrypoints": "https"
+          "traefik.http.routers.homer.tls.certresolver": "letsencrypt"
+          "traefik.http.routers.homer.entrypoints": "https,http"
           "traefik.http.services.homer.loadbalancer.server.port": "8080"
           "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
@@ -704,7 +722,7 @@
         labels:
            "traefik.enable": "true"
            "traefik.http.routers.deemix.rule": "Host(`deemix.dennetwork.xyz`)"
-           "traefik.http.routers.deemix.entrypoints": "https"
+           "traefik.http.routers.deemix.entrypoints": "https,http"
            "traefik.http.routers.deemix.tls.certresolver": "letsencrypt"
            "traefik.http.services.deemix.loadbalancer.server.port": "6595"
            "traefik.http.routers.http-catchall.rule": "hostregexp(`{host:[a-z-.]+}`)"
@@ -717,6 +735,7 @@
     - name: Run traefik
       docker_container:
         name: traefik
+        published_ports: ["8080", "443", "80"]
         recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_readarr.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
         labels: 
           "traefik.enable": "true"
@@ -729,13 +748,15 @@
           "traefik.http.routers.http_catchall.entrypoints": "http"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         image: "traefik:latest"
-        network_mode: host
+        networks:
+         - name: docker_dmz
+           ipv4_address: "192.168.8.70"
         restart_policy: unless-stopped
         volumes:
         - "/var/run/docker.sock:/var/run/docker.sock"
         - "/var/www/ssl/:/ssl"
         - "/home/docker/docker_data/traefik/traefik.yml:/traefik.yml"
-        - "/home/docker/docker_data/traefik/certs.yml:/certs.yml"
+        - "/home/docker/docker_data/traefik/file.yml:/file.yml"
         - "/home/docker/docker_data/traefik/acme.json:/acme.json"
         - "/root/webca.crt:/webca.crt"
         - "/root/webca.pem:/webca.pem"
@@ -754,6 +775,11 @@
     - name: Stop all docker containers
       shell: "docker kill $(docker ps -q)"
     
+    - name: Set ACME permissions
+      file:
+        path: "/home/docker/docker_data/traefik/acme.json"
+        mode: "0600"
+
     - name: Copy Indexers zip
       copy:
         src: ../data/jackett/Indexers.zip
@@ -834,13 +860,13 @@
         replace: "{{ item.line }}"
         path: "{{ item.path }}"
       with_items:
-       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/lidarr</UrlBase>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
-       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/sonarr</UrlBase>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
-       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/radarr</UrlBase>", path: "/home/docker/docker_data/radarr/config/config.xml"}
-       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/readarr</UrlBase>", path: "/home/docker/docker_data/readarr/config.xml"}
-       - { regexp: 'base_url.+\=(.+)*', line: "base_url = /bazarr", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
-       - { regexp: '"BasePathOverride"(\s+)?\:\s+[^,\r\n]+', line: '"BasePathOverride": "/jackett"', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
-       - { regexp: '"base":\s+".+"', line: '  "base" : "/deluge"', path: "/home/docker/docker_data/deluge/config/web.conf"}
+       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase></UrlBase>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
+       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase></UrlBase>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
+       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase></UrlBase>", path: "/home/docker/docker_data/radarr/config/config.xml"}
+       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase></UrlBase>", path: "/home/docker/docker_data/readarr/config.xml"}
+       - { regexp: 'base_url.+\=(.+)*', line: "base_url = ", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
+       - { regexp: '"BasePathOverride"(\s+)?\:\s+[^,\r\n]+', line: '"BasePathOverride": ""', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
+       - { regexp: '"base":\s+".+"', line: '  "base" : ""', path: "/home/docker/docker_data/deluge/config/web.conf"}
       register: url_base_output
 
 
@@ -958,10 +984,11 @@
 
     - name: Wait for return code
       uri:
-        url: "https://{{ ansible_default_ipv4.address }}:443/{{ item }}"
+        url: "https://{{ item }}.dennetwork.xyz:443/"
         status_code: 200
         validate_certs: false
       register: result
+      connection: local
       until: result.status == 200
       retries: 60
       delay: 1
@@ -980,10 +1007,14 @@
         cf_string: "{{ cf_string + ' '  + item.key + ' ' + item.value }}"
       when: item.value is defined
       with_items:
-       - {key: "--open-subtitles-username", value: vm_vars.open_subtitles_username}
-       - {key: "--open-subtitles-password", value: vm_vars.open_subtitles_password}
-       - {key: "--plex-username", value: vm_vars.plex_username}
-       - {key: "--plex-password", value: vm_vars.plex_password}
+       - {key: "--open-subtitles-username", value: "{{ vm_vars.open_subtitles_username | quote}}"}
+       - {key: "--open-subtitles-password", value: "{{ vm_vars.open_subtitles_password | quote }}"}
+       - {key: "--plex-username", value: "{{ vm_vars.plex_username | quote }}"}
+       - {key: "--plex-password", value: "{{vm_vars.plex_password | quote }}"}
+
+    - name: debug
+      debug:
+        msg: "{{ cf_string }}"
 
     - name: Run configurator (with opensubtitles support)
       command: "{{ cf_string }}"
@@ -1003,6 +1034,31 @@
       with_items:
        - "avahi-daemon"
 
+    - name: Pull PAN LE Import
+      git:
+        repo: https://github.com/michaelbellgh/pan_le_import.git
+        dest: /tmp/pan_le_import
+        version: master
+        force: yes
+
+    - name: Copy PAN LE
+      copy:
+        src: /tmp/pan_le_import
+        dest: /opt/
+        remote_src: yes
+        mode: '0744'
+    
+    - name: Cleanup PAN LE
+      file:
+        state: absent
+        path: /tmp/pan_le_import
+
+
+    - name: Set up cron jobs
+      ansible.builtin.cron:
+        name: Run PAN LE Import
+        day: 1
+        job: "python3 /opt/pan_le_import/import.py"
 
     - name: Restart all containers
       shell: docker restart $(docker ps -q)
