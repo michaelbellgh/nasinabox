@@ -7,7 +7,7 @@ import urllib3
 urllib3.disable_warnings()
 
 
-def api_request_darr(hostname: str, port: int, path: str, api_key: str, json: str, scheme: str="https", method: str="POST", verify_certificate=False):
+def api_request_darr(hostname: str, port: int, path: str, api_key: str, json: dict, scheme: str="https", method: str="POST", verify_certificate=False):
     uri = scheme + "://" + hostname + ":" + str(port) + path + "?apikey=" + api_key
 
     response = None
@@ -416,12 +416,28 @@ def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key
 def configure_all_apps(vars):
 
 
+<<<<<<< HEAD
+    sonarr = darr_instance(vars['hostname'], vars['port'], "/sonarr", True, True, vars['apikey'], "https")
+    lidarr = darr_instance(vars['hostname'], vars['port'], "/lidarr", True, False, vars['apikey'], "https")
+    radarr = darr_instance(vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], "https")
+    bazarr = darr_instance(vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], "https")
+    readarr = darr_instance(vars['hostname'], vars['port'], "/readarr", True, False, vars['apikey'], "https")
+=======
 
+<<<<<<< HEAD
     sonarr = darr_instance("sonarr", "sonarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
     lidarr = darr_instance("lidarr", "lidarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
     radarr = darr_instance("radarr", "radarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
     bazarr = darr_instance("bazarr", "bazarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
     readarr = darr_instance("readarr", "readarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], "https")
+=======
+    sonarr = darr_instance("sonarr", vars['hostname'], vars['port'], "/sonarr", True, True, vars['apikey'], "https")
+    lidarr = darr_instance("lidarr", vars['hostname'], vars['port'], "/lidarr", True, True, vars['apikey'], "https")
+    radarr = darr_instance("radarr", vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], "https")
+    bazarr = darr_instance("bazarr", vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], "https")
+    readarr = darr_instance("readarr", vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], "https")
+>>>>>>> b0d90fb6b501da02ef794b9fb2f01ad0752dd9e4
+>>>>>>> 75c544a5d8ff751d916ebd6db926a1061a53e2eb
 
     
     darr_add_download_client(sonarr, "Deluge", "deluge", 8112, "", None ,"deluge", implementation="Deluge")
@@ -429,10 +445,17 @@ def configure_all_apps(vars):
     darr_add_download_client(radarr, "Deluge", "deluge", 8112, "", None ,"deluge", implementation="Deluge")
     darr_add_download_client(readarr, "Deluge", "deluge", 8112, "", None ,"deluge", implementation="Deluge", api_version="v1")
 
+<<<<<<< HEAD
+    darr_add_root_folder(sonarr, "/tv/","/tv/")
+    darr_add_root_folder(lidarr, "/music/", "/music/", api_version="v1", additional_fields={"defaultMetadataProfileId": 1, "defaultQualityProfileId": 1, "defaultTags": []})
+    darr_add_root_folder(radarr, "/movies/", "/movies/")
+    darr_add_root_folder(readarr, "/books/", "/books/", api_version="v1")
+=======
     darr_add_root_folder(sonarr, "/tv/", "/tv/")
     darr_add_root_folder(lidarr, "/music/", "/music/", api_version="v1", additional_fields={"defaultMetadataProfileId": "1", "defaultQualityProfileId": "1", "defaultTags": []})
     darr_add_root_folder(radarr, "/movies", "/movies")
     darr_add_root_folder(readarr, "/books/", "/books/", additional_fields={"defaultMetadataProfileId": "1", "defaultQualityProfileId": "1", "defaultTags": [], "host": "localhost", "isCalibreLibrary": False, "outputProfile": "default", "port": 8080, "useSsl": False}, api_version="v1")
+>>>>>>> b0d90fb6b501da02ef794b9fb2f01ad0752dd9e4
 
     bazarr_configure_english_providers(bazarr, vars['open_subtitles_username'], vars['open_subtitles_password'])
     bazarr_configure_sonarr_provider(bazarr, sonarr)

@@ -141,7 +141,10 @@
           - avahi-daemon
           - unattended-upgrades
           - parted
+<<<<<<< HEAD
+=======
           - sqlite
+>>>>>>> b0d90fb6b501da02ef794b9fb2f01ad0752dd9e4
           - open-vm-tools
           - zfsutils-linux
           - python3-docker

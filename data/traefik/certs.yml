@@ -1,0 +1,11 @@
+tls:
+  certificates:
+    - certFile: /webca.crt
+      keyfile: /webca.pem
+      stores:
+        - default
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /webca.crt
+        keyFile: /webca.pem
