@@ -245,7 +245,12 @@
         fstype: ext4
       with_items: 
        - { path: "/mnt/Storage", src: "/dev/sdb1"}
-      when: storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
+      when: storage_exists.stat.exists|bool
+
+    - name: Fallback to fix mount module issue
+      command: "mount {{ item }}"
+      with_items: 
+       - "/mnt/Storage"        
 
     - name: Set permissions on Storage
       file:
@@ -282,7 +287,7 @@
     - name: Start Deluge
       docker_container:
         name: deluge
-        image: linuxserver/deluge
+        image: linuxserver/deluge:2.1.1-r3-ls179
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.deluge.rule": "PathPrefix(`/deluge`)"
@@ -510,6 +515,37 @@
         purge_networks: yes
       register: docker_bazarr
 
+
+    - name: Start prowlarr
+      docker_container:
+        name: prowlarr
+        image: lscr.io/linuxserver/prowlarr:develop
+        env: 
+         TZ: Australia/Melbourne
+         PUID: "1001"
+         PGID: "1001"
+        published_ports: ["9696:9696"]
+        labels:
+          "traefik.enable": "true"
+          "traefik.http.routers.prowlarr.rule": "PathPrefix(`/prowlarr`)"
+          "traefik.http.routers.prowlarr.entrypoints": "https"
+          "traefik.http.routers.prowlarr.tls.certresolver": "letsencrypt"
+          "traefik.http.services.prowlarr.loadbalancer.server.port": "9696"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
+        networks:
+        - name: "docker"
+          links: ["sonarr", "radarr"]
+        volumes:
+        - /home/docker/docker_data/prowlarr/config:/config
+        - "/var/www/ssl/:/ssl"
+        restart_policy: unless-stopped
+        purge_networks: yes
+      register: docker_prowlarr
+
     - name: Start readarr
       docker_container:
         name: readarr
@@ -698,8 +734,13 @@
         path: "{{ item.path }}"
       with_items:
        - { regexp: '"/root/Downloads"', line: '"/downloads"', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"max_connections_global\"\s*\:\s*\d+', line: '"max_connections_global": 500', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"max_active_limit\"\s*\:\s*\d+', line: '"max_active_limit": 20', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"max_active_seeding\"\s*\:\s*\d+', line: '"max_active_seeding": 5', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"share_ratio_limit\"\s*\:\s*[\d\.]+', line: '"share_ratio_limit": 2.0', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"stop_seed_at_ratio\"\s*\:\s*\d+', line: '"stop_seed_at_ratio": true', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"stop_seed_ratio\"\s*\:\s*[\d\.]+', line: '"stop_seed_ratio": 2.0', path: "/home/docker/docker_data/deluge/config/core.conf"}
        - { regexp: '\"enabled_plugins\"[:\s]+\[.*]', line: '"enabled_plugins": ["Label", "Execute"]', path: "/home/docker/docker_data/deluge/config/core.conf"}
-      when: not deluge_web_conf.stat.exists
       
 
     - name: Start deluge
@@ -719,6 +760,7 @@
         path: "{{ item.path }}"
       with_items:
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/lidarr</UrlBase>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
+       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/prowlarr</UrlBase>", path: "/home/docker/docker_data/prowlarr/config/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/sonarr</UrlBase>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/radarr</UrlBase>", path: "/home/docker/docker_data/radarr/config/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/readarr</UrlBase>", path: "/home/docker/docker_data/readarr/config.xml"}
@@ -736,6 +778,7 @@
         replace: "{{ item.line }}"
       with_items:
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
+        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/prowlarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/radarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/readarr/config.xml"}
@@ -795,7 +838,7 @@
         name: "{{ item }}"
         state: started
         restart: yes
-      with_items: ["lidarr", "sonarr", "radarr", "bazarr", "readarr", "jackett", "deluge", "ombi"]
+      with_items: ["lidarr", "sonarr", "radarr", "bazarr", "readarr", "jackett", "deluge", "ombi", "prowlarr"]
       when: url_base_output.changed or api_change_output.changed
     
 
@@ -864,10 +907,11 @@
         cf_string: "{{ cf_string + ' '  + item.key + ' ' + item.value }}"
       when: item.value is defined
       with_items:
-       - {key: "--open-subtitles-username", value: vm_vars.open_subtitles_username}
-       - {key: "--open-subtitles-password", value: vm_vars.open_subtitles_password}
-       - {key: "--plex-username", value: vm_vars.plex_username}
-       - {key: "--plex-password", value: vm_vars.plex_password}
+       - {key: "--open-subtitles-username", value: "{{ vm_vars.open_subtitles_username | quote}}"}	
+       - {key: "--open-subtitles-password", value: "{{ vm_vars.open_subtitles_password | quote }}"}	
+       - {key: "--plex-username", value: "{{ vm_vars.plex_username | quote }}"}	
+       - {key: "--plex-password", value: "{{vm_vars.plex_password | quote }}"}	
+
 
     - name: Run configurator (with opensubtitles support)
       command: "{{ cf_string }}"

@@ -123,6 +123,13 @@ services:
         keywords: "media tv movie torrent"
         url: "https://{{ vm_vars.vminfo.hostname }}.local/jackett"
         target: "_blank" # optional html a tag target attribute
+      - name: "Prowlarr"
+        logo: "assets/icons/prowlarr.png"
+        subtitle: "Helps find downloads for TV shows, movies"
+        tag: "app"
+        keywords: "media tv movie torrent"
+        url: "https://{{ vm_vars.vminfo.hostname }}.local/prowlarr"
+        target: "_blank" # optional html a tag target attribute
       - name: "Readarr"
         logo: "assets/icons/readarr.png"
         subtitle: "Downloads books"

@@ -7,7 +7,7 @@ import urllib3
 urllib3.disable_warnings()
 
 
-def api_request_darr(hostname: str, port: int, path: str, api_key: str, json: str, scheme: str="https", method: str="POST", verify_certificate=False):
+def api_request_darr(hostname: str, port: int, path: str, api_key: str, json: dict, scheme: str="https", method: str="POST", verify_certificate=False):
     uri = scheme + "://" + hostname + ":" + str(port) + path + "?apikey=" + api_key
 
     response = None
@@ -328,14 +328,206 @@ def bazarr_configure_lang_profile(darr: darr_instance, language="en", validate_c
 
 def make_post_request_indexers(url, json_body, headers, darr_name, verify):
     resp = requests.post(url, json=json_body, headers=headers, verify=verify)
-    if resp.status_code == 400 and "but no results in the configured categories" in resp.text or "unable to connect to indexer" in resp.text:
+    if (resp.status_code == 400 and 
+        ("but no results in the configured categories" in resp.text or
+         "unable to connect to indexer" in resp.text or
+          "Query successful, but no results in the configured categories were returned from your indexer" in resp.text)):
         #We should blacklist this indexer
         file = open("blacklist.txt", "a+")
         file.writelines([darr_name + ":" + json_body["name"] + "\n"])
         file.close()
     print(resp)
 
-def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key, jackett_scheme, jackett_hostname: str, jackett_port: int, jackett_path, int_jackett_scheme, int_jackett_hostname, int_jackett_port, int_jackett_path, validate_certs=False, categories=[5030, 5040], api_version="v3"):
+def prowlarr_get_all_public_indexers(prowlarr: darr_instance, validate_certs: bool, api_key: str, indexer_languages: list=["en-AU", "en-GB", "en-US"], protocol="torrent") -> list:
+    url = prowlarr.scheme + "://" + prowlarr.hostname + ":" + str(prowlarr.port) + prowlarr.path + "/api/v1/indexer/schema"
+    response_json = requests.get(url, verify=validate_certs, headers={"x-api-key": api_key}).json()
+
+    public_indexers_json = [x for x in response_json if x["privacy"].lower() == "public"]
+    if indexer_languages:
+        public_indexers_json = [x for x in public_indexers_json if x["language"] in indexer_languages]
+    if protocol:
+        public_indexers_json = [x for x in public_indexers_json if x["protocol"] == protocol]
+
+
+    return public_indexers_json
+
+
+def prowlarr_add_indexers(prowlarr: darr_instance, validate_certs: bool, api_key: str, indexers: list) -> bool:
+    some_success = False
+    if not os.path.exists("blacklist.txt"):
+        file = open("blacklist.txt", "w")
+        file.close()
+    blacklisted_sites = list(set([x.strip().split(":")[-1] for x in open("blacklist.txt", "r").readlines() if x.strip().split(":")[0] == "prowlarr"]))
+
+    def add_to_blacklist(name: str) -> None:
+        file = open("blacklist.txt", "a+")
+        file.writelines(["prowlarr:" + json_body["name"] + "\n"])
+        file.close()
+
+    for indexer in indexers:
+        if indexer["name"] in blacklisted_sites:
+            continue
+        url = prowlarr.scheme + "://" + prowlarr.hostname + ":" + str(prowlarr.port) + prowlarr.path + "/api/v1/indexer?"
+        json_body = indexer
+        response = requests.post(url, headers={"x-api-key": api_key}, json=json_body, verify=validate_certs)
+        response_json = response.json()
+        if response.status_code == 400:
+            if response_json[0]["errorMessage"] == "Should be unique":
+                continue
+            if response_json[0]["errorMessage"].endswith("blocked by CloudFlare Protection."):
+                add_to_blacklist(indexer["name"])
+            print("Unable to add indexer " + indexer["name"] + "\nReason: " + response.text)
+            add_to_blacklist(indexer["name"])
+        elif response.status_code == 201:
+            some_success = True
+        else:
+            add_to_blacklist(indexer["name"])
+
+
+    return some_success
+
+
+def prowlarr_add_radarr(prowlarr_instance: darr_instance, radarr_instance: darr_instance, internal_prowlarr_instance: darr_instance, validate_ssl: bool=False) -> bool:
+    url = prowlarr_instance.scheme + "://" + prowlarr_instance.hostname + ":" + str(prowlarr_instance.port) + prowlarr_instance.path + "/api/v1/applications?"
+    body = {
+        "configContract": "RadarrSettings",
+        "implementation": "Radarr",
+        "implementationName": "Radarr",
+        "infoLink": "https://wiki.servarr.com/prowlarr/supported#radarr",
+        "name": "Radarr",
+        "syncLevel": "addOnly",
+        "tags": [],
+        "fields": [
+            {
+                "name": "prowlarrUrl",
+                "value": internal_prowlarr_instance.scheme + "://" + internal_prowlarr_instance.hostname + ":" + str(internal_prowlarr_instance.port)
+            },
+            {
+                "name": "baseUrl",
+                "value": radarr_instance.scheme + "://" + radarr_instance.hostname + ":" + str(radarr_instance.port)
+            },
+            {
+                "name": "apiKey",
+                "value": radarr_instance.api_key
+            },
+            {
+                "name": "syncCategories",
+                "value": [2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060, 2070, 2080]
+            }
+        ]
+    }
+
+    response = requests.post(url, headers={"x-api-key": prowlarr_instance.api_key}, verify=validate_ssl, json=body)
+    if response.status_code == 201:
+        print("Added Radarr to Prowlarr")
+        return True
+    elif response.status_code == 400:
+        json_response = response.json()
+        if json_response[0]["errorMessage"] == "Should be unique":
+            return True
+        else:
+            print("Couldnt add Radarr instance to Prowlarr")
+    
+    return False
+
+def prowlarr_add_sonarr(prowlarr_instance: darr_instance, sonarr_instance: darr_instance, internal_prowlarr_instance: darr_instance, validate_ssl: bool=False) -> bool:
+    url = prowlarr_instance.scheme + "://" + prowlarr_instance.hostname + ":" + str(prowlarr_instance.port) + prowlarr_instance.path + "/api/v1/applications?"
+    body = {
+        "configContract": "SonarrSettings",
+        "implementation": "Sonarr",
+        "implementationName": "Sonarr",
+        "infoLink": "https://wiki.servarr.com/prowlarr/supported#radarr",
+        "name": "Sonarr",
+        "syncLevel": "addOnly",
+        "tags": [],
+        "fields": [
+            {
+                "name": "prowlarrUrl",
+                "value": internal_prowlarr_instance.scheme + "://" + internal_prowlarr_instance.hostname + ":" + str(internal_prowlarr_instance.port)
+            },
+            {
+                "name": "baseUrl",
+                "value": sonarr_instance.scheme + "://" + sonarr_instance.hostname + ":" + str(sonarr_instance.port)
+            },
+            {
+                "name": "apiKey",
+                "value": sonarr_instance.api_key
+            },
+            {
+                "name": "syncCategories",
+                "value": [5000, 5010, 5020, 5030, 5040, 5045, 505]
+            },
+            {
+                "name": "animeSyncCategories",
+                "value": [5070]
+            }
+        ]
+    }
+
+    response = requests.post(url, headers={"x-api-key": prowlarr_instance.api_key}, verify=validate_ssl, json=body)
+    if response.status_code == 201:
+        print("Added Radarr to Prowlarr")
+        return True
+    elif response.status_code == 400:
+        json_response = response.json()
+        if json_response[0]["errorMessage"] == "Should be unique":
+            return True
+        else:
+            print("Couldnt add Radarr instance to Prowlarr")
+    
+    return False
+
+def prowlarr_set_authentication(prowlarr_instance: darr_instance, username: str, password: str, authentication_method: str="forms", validate_ssl: bool=False) -> bool:
+    url = prowlarr_instance.scheme + "://" + prowlarr_instance.hostname + ":" + str(prowlarr_instance.port) + prowlarr_instance.path + "/api/v1/config/host"
+
+    body = {
+    "bindAddress": "*",
+    "port": 9696,
+    "sslPort": 6969,
+    "enableSsl": False,
+    "launchBrowser": True,
+    "authenticationMethod": "forms",
+    "authenticationRequired": "disabledForLocalAddresses",
+    "analyticsEnabled": True,
+    "username": "nasinabox",
+    "password": "nasinabox",
+    "logLevel": "info",
+    "consoleLogLevel": "",
+    "branch": "develop",
+    "apiKey": prowlarr_instance.api_key,
+    "sslCertPath": "",
+    "sslCertPassword": "",
+    "urlBase": "/prowlarr",
+    "instanceName": "Prowlarr",
+    "updateAutomatically": False,
+    "updateMechanism": "docker",
+    "updateScriptPath": "",
+    "proxyEnabled": False,
+    "proxyType": "http",
+    "proxyHostname": "",
+    "proxyPort": 8080,
+    "proxyUsername": "",
+    "proxyPassword": "",
+    "proxyBypassFilter": "",
+    "proxyBypassLocalAddresses": True,
+    "certificateValidation": "enabled",
+    "backupFolder": "Backups",
+    "backupInterval": 7,
+    "backupRetention": 28,
+    "historyCleanupDays": 365,
+    "id": 1
+    }
+
+    response = requests.put(url, verify=validate_ssl, json=body, headers={"x-api-key": prowlarr_instance.api_key})
+    if response.status_code == 202:
+        return True
+    else:
+        raise Exception("Unknown issue setting authentication method for Prowlarr\n" + response.json()[0]["errorMessage"])
+
+
+
+
+def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key: str, jackett_scheme: str, jackett_hostname: str, jackett_port: int, jackett_path, int_jackett_scheme, int_jackett_hostname, int_jackett_port, int_jackett_path, validate_certs=False, categories=[5030, 5040], api_version="v3"):
     url = jackett_scheme + "://" + jackett_hostname + ":" + str(jackett_port) + jackett_path + "/api/v2.0/indexers/?configured=true"
     response_json = requests.get(url, verify=validate_certs).json()
     
@@ -422,6 +614,9 @@ def configure_all_apps(vars):
     radarr = darr_instance("radarr", vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], "https")
     bazarr = darr_instance("bazarr", vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], "https")
     readarr = darr_instance("readarr", vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], "https")
+    prowlarr_instance = darr_instance("prowlarr", vars['hostname'], vars['port'], "/prowlarr", True, True, vars['apikey'], "https")
+    prowlarr_internal_instance = darr_instance("prowlarr_internal", "prowlarr", 9696, "/prowlarr", False, False, vars['apikey'], "http")
+
 
     
     darr_add_download_client(sonarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
@@ -451,6 +646,11 @@ def configure_all_apps(vars):
     darr_add_all_configured_jacket_indexers(readarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[3030, 7020, 8010], api_version="v1")
     darr_add_all_configured_jacket_indexers(lidarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[3000,3010,3020,3030,3040], api_version="v1")
 
+    indexers = prowlarr_get_all_public_indexers(prowlarr_instance, False, prowlarr_instance.api_key)
+    prowlarr_add_indexers(prowlarr_instance, False, prowlarr_instance.api_key, indexers)
+    prowlarr_add_radarr(prowlarr_instance, radarr, prowlarr_internal_instance)
+    prowlarr_add_sonarr(prowlarr_instance, sonarr, prowlarr_internal_instance)
+    prowlarr_set_authentication(prowlarr_instance, "nasinabox", "nasinabox")
    
 
     

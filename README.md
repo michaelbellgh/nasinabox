@@ -10,7 +10,7 @@ nasinabox is a portable NAS that can run in a VM or physical machine. Users can 
 
 - Homer dashboard built in, providing a landing page for users
 - A suite of automatic TV, movies, books, music and subtitle downloaders
-- Auto configured Torznab indexer for torrent downloads
+- Auto configured Torznab (Jackett) and Prowlarr indexer for torrent downloads
 - Pre configured Deluge torrent frontend and daemon
 - Plex container ready to be used on local network
 - Auto configuration of the downloaders, indexers and torrent client
@@ -71,6 +71,7 @@ This project only has custom ansible playbooks and python configuration scripts 
 - Samba - SMB server (https://www.samba.org/) running on docker container by dperson (https://hub.docker.com/r/dperson/samba)
 - Plex - Media player and server (https://www.plex.tv/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/plex)
 - Ombi - Plex and downloader (sonarr, radarr, lidarr) request frontend (https://ombi.io/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/ombi/)
+- Prowlarr (sonarr, radarr, lidarr, readarr) specialised indexer manager (https://prowlarr.com/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/prowlarr/)
 
 In addition to the above docker contaners, the configuration script (data/scripts/configure_apps.py) is included as part of this repo and will automatically configure the included applications to integrate with each other. 
 The exception to this is Ombi and Plex, as they require manual configuration with Plex credentials
