@@ -247,6 +247,11 @@
        - { path: "/mnt/Storage", src: "/dev/sdb1"}
       when: storage_exists.stat.exists|bool
 
+    - name: Make mount point
+      file: 
+        path: /mnt/Storage
+        state: directory
+
     - name: Fallback to fix mount module issue
       command: "mount {{ item }}"
       with_items: 

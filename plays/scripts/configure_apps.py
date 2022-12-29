@@ -163,7 +163,7 @@ def ombi_upload_lidarr_profiles(ombi: ombi_instance, lidarr_hostname: str, lidar
     print(response.text)
 
 
-def ombi_initial_setup_with_plex(hostname: str, port: int, path: str, plex_username: str, plex_password: str, scheme: str="https", validate_certificates: bool=False):
+def ombi_initial_setup_with_plex(hostname: str, port: int, path: str, plex_username: str, plex_password: str, api_key: str, scheme: str="https", validate_certificates: bool=False):
     login_fields = {"login": plex_username, "password": plex_password}
     uri = scheme + "://" + hostname + ":" + str(port) + path
 
@@ -183,18 +183,17 @@ def ombi_initial_setup_with_plex(hostname: str, port: int, path: str, plex_usern
 
     #Something gets set on the backend when the landing page gets loaded - needed for next steps
     for url in ["/api/v1/Settings/customization", "/translations/en.json?v=92360805", "/api/v1/Settings/voteenabled", "/api/v1/Settings/issuesenabled", "/api/v1/Settings/LandingPage",
-             "/ombi/api/v1/status/Wizard/", "/api/v1/Settings/Authentication", "/v1/Settings/clientid", "/api/v1/Settings/clientid"]:
+             "/api/v1/status/Wizard/", "/api/v1/Settings/Authentication", "/v1/Settings/clientid", "/api/v1/Settings/clientid"]:
         response = requests.get(uri + url, verify=validate_certificates, headers={"content-type" : "application/json"})
 
 
     response = requests.post(uri + "/api/v1/Plex/", data=json.dumps(login_fields), verify=validate_certificates, headers={"content-type" : "application/json"})
     response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"login":"","password":"","usePlexAdminAccount":True}), verify=validate_certificates, headers={"content-type" : "application/json"})
-    response = requests.post(uri + "/api/v2/wizard/config", data=json.dumps({"applicationName":"Ombi - nasinabox","applicationUrl":None,"logo":None}), verify=validate_certificates, headers={"content-type" : "application/json"})
+    response = requests.post(uri + "/api/v2/wizard/config", data=json.dumps({"applicationName":"Ombi - DenNetwork","applicationUrl":None,"logo":None}), verify=validate_certificates, headers={"content-type" : "application/json"})
     response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"username":"admin","password":"admin","usePlexAdminAccount":False}), verify=validate_certificates, headers={"content-type" : "application/json"})
 
-    response = requests.post(uri + "/api/v2/Features/enable", data=json.dumps({"name": "Movie4KRequests", "enabled": False}), verify=validate_certificates, headers={"content-type" : "application/json"})
-    response = requests.post(uri + "/api/v1/Settings/Authentication", data=json.dumps({"allowNoPassword":True,"requiredDigit":None,"requiredLength":0,"requiredLowercase":None,"requireNonAlphanumeric":False,"requireUppercase":False,"enableOAuth":False,"enableHeaderAuth":False,"headerAuthVariable":None}), verify=validate_certificates, headers={"content-type" : "application/json"})
-
+    response = requests.post(uri + "/api/v2/Features/enable", data=json.dumps({"name": "Movie4KRequests", "enabled": False}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
+    response = requests.post(uri + "/api/v1/Settings/Authentication", data=json.dumps({"allowNoPassword":True,"requiredDigit":None,"requiredLength":0,"requiredLowercase":None,"requireNonAlphanumeric":False,"requireUppercase":False,"enableOAuth":False,"enableHeaderAuth":False,"headerAuthVariable":None}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
 
 
 
@@ -518,10 +517,10 @@ def prowlarr_set_authentication(prowlarr_instance: darr_instance, username: str,
     "id": 1
     }
 
-    response = requests.put(url, verify=validate_ssl, json=body, headers={"x-api-key": prowlarr_instance.api_key})
-    if response.status_code == 202:
-        return True
-    else:
+    response = requests.put(url, verify=validate_ssl, json=body, headers={"x-api-key": prowlarr_instance.api_key})	
+    if response.status_code == 202 or response.status_code == 200:	
+        return True	
+    else:	
         raise Exception("Unknown issue setting authentication method for Prowlarr\n" + response.json()[0]["errorMessage"])
 
 
@@ -531,8 +530,8 @@ def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key
     url = jackett_scheme + "://" + jackett_hostname + ":" + str(jackett_port) + jackett_path + "/api/v2.0/indexers/?configured=true"
     response_json = requests.get(url, verify=validate_certs).json()
     
-    current_darr_indexers = requests.get(f"{darr.scheme}://{darr.hostname}:" + str(darr.port) + darr.path + "/api/" + api_version + "/indexer", headers={"x-api-key" : darr.api_key}, verify=validate_certs).json()
-    darr_indexers = [x["name"] for x in current_darr_indexers]
+    current_darr_indexers = requests.get(f"{darr.scheme}://{darr.hostname}:" + str(darr.port) + darr.path + "/api/" + api_version + "/indexer", headers={"x-api-key" : darr.api_key}, verify=validate_certs)	
+    current_darr_indexers = current_darr_indexers.json()
 
     blacklisted_sites = None
     if os.path.exists("blacklist.txt"):
@@ -546,7 +545,7 @@ def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key
         indexer_dict = {}
         indexer_dict["id"] = indexer["id"]
 
-        if indexer_dict["id"] in darr_indexers:
+        if indexer_dict["id"] in current_darr_indexers:
             continue
         cap_matches = [x["ID"] for x in indexer["caps"] if int(x["ID"]) in categories]
         if len(cap_matches) < 1:
