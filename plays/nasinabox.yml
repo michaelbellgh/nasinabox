@@ -158,6 +158,19 @@
        - { src: "/tmp/webca.pem", dest: "/root/webca.pem"}
       when: root_key.changed
 
+    - name: Set Traefik default port (if ssl)
+      set_fact: 
+        traefik_default_port: "443"
+        traefik_default_scheme: "https"
+      when: vm_vars.nas.default_to_ssl is defined and vm_vars.nas.default_to_ssl
+
+    - name: Set Traefik default port (if not ssl)
+      set_fact:
+        traefik_default_port: "80"
+        traefik_default_scheme: "http"
+      when: vm_vars.nas.default_to_ssl is not defined or (vm_vars.nas.default_to_ssl is defined and not vm_vars.nas.default_to_ssl)
+        
+
     - name: Update CA store
       command: update-ca-certificates
       when: root_key.changed
@@ -244,22 +257,23 @@
         state: present
         fstype: ext4
       with_items: 
-       - { path: "/mnt/Storage", src: "/dev/sdb1"}
+       - { path: "{{ vm_vars.nas.storage_path }}", src: "/dev/sdb1"}
       when: storage_exists.stat.exists|bool
 
     - name: Make mount point
       file: 
-        path: /mnt/Storage
+        path: "{{ vm_vars.nas.storage_path }}"
         state: directory
 
     - name: Fallback to fix mount module issue
       command: "mount {{ item }}"
       with_items: 
-       - "/mnt/Storage"        
+       - "{{ vm_vars.nas.storage_path }}"
+      ignore_errors: yes
 
     - name: Set permissions on Storage
       file:
-        path: /mnt/Storage/
+        path: "{{ vm_vars.nas.storage_path }}"
         mode: '644'
         state: directory
       become: yes
@@ -296,15 +310,15 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.deluge.rule": "PathPrefix(`/deluge`)"
-          "traefik.http.routers.deluge.entrypoints": "https"
-          "traefik.http.routers.deluge.tls.certresolver": "letsencrypt"
+          "traefik.http.routers.deluge.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.routers.deluge.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.services.deluge.loadbalancer.server.port": "8112"
           "traefik.http.routers.deluge.middlewares": "deluge-stripprefix@docker"
           "traefik.http.middlewares.deluge-stripprefix.stripprefix.prefixes": "/deluge"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: "Australia/Melbourne"
@@ -314,9 +328,9 @@
          - name: docker
         volumes:
         - /home/docker/docker_data/deluge/config:/config
-        - /mnt/Storage/Downloads:/downloads
-        - /mnt/Storage/Downloads/watch:/watch
-        - /mnt/Storage/Downloads/incomplete:/incomplete
+        - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
+        - "{{ vm_vars.nas.storage_path }}Downloads/watch:/watch"
+        - "{{ vm_vars.nas.storage_path }}Downloads/incomplete:/incomplete"
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
         purge_networks: yes
@@ -333,8 +347,8 @@
         network_mode: host
         volumes:
         - /home/docker/docker_data/plex/config:/config
-        - /mnt/Storage/Movies:/movies
-        - /mnt/Storage/TV:/tv
+        - "{{ vm_vars.nas.storage_path }}Movies:/movies"
+        - "{{ vm_vars.nas.storage_path }}TV:/tv"
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
       register: docker_plex
@@ -346,13 +360,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.jackett.rule": "PathPrefix(`/jackett`)"
-          "traefik.http.routers.jackett.entrypoints": "https"
-          "traefik.http.routers.jackett.tls.certresolver": "letsencrypt"
+          "traefik.http.routers.jackett.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.jackett.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
           "traefik.http.services.jackett.loadbalancer.server.port": "9117"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: Australia/Melbourne
@@ -379,21 +393,21 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.lidarr.rule": "PathPrefix(`/lidarr`)"
-          "traefik.http.routers.lidarr.entrypoints": "https"
-          "traefik.http.routers.lidarr.tls.certresolver": "letsencrypt"
+          "traefik.http.routers.lidarr.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.lidarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
           "traefik.http.services.lidarr.loadbalancer.server.port": "8686"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["jackett", "deluge"]
         volumes:
         - /home/docker/docker_data/lidarr/config:/config
-        - /mnt/Storage/Music:/music
-        - /mnt/Storage/Downloads:/downloads
+        - "{{ vm_vars.nas.storage_path }}Music:/music"
+        - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         purge_networks: yes
@@ -406,13 +420,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.radarr.rule": "PathPrefix(`/radarr`)"
-          "traefik.http.routers.radarr.entrypoints": "https"
-          "traefik.http.routers.radarr.tls.certresolver": "letsencrypt"
+          "traefik.http.routers.radarr.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.services.radarr.loadbalancer.server.port": "7878"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.routers.radarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: Australia/Melbourne
@@ -423,8 +437,8 @@
           links: ["deluge", "jackett"]
         volumes:
         - /home/docker/docker_data/radarr/config:/config
-        - /mnt/Storage/Movies:/movies
-        - /mnt/Storage/Downloads:/downloads
+        - "{{ vm_vars.nas.storage_path }}Movies:/movies"
+        - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         purge_networks: yes
@@ -441,16 +455,16 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.sonarr.rule": "PathPrefix(`/sonarr`)"
-          "traefik.http.routers.sonarr.entrypoints": "https"
-          "traefik.http.routers.sonarr.tls.certresolver": "letsencrypt"
+          "traefik.http.routers.sonarr.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.sonarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
           "traefik.http.services.sonarr.loadbalancer.server.port": "8989"
         networks:
         - name: "docker"
           links: ["jackett", "deluge"]
         volumes:
         - /home/docker/docker_data/sonarr/config:/config
-        - /mnt/Storage/TV:/tv
-        - /mnt/Storage/Downloads:/downloads
+        - "{{ vm_vars.nas.storage_path }}TV:/tv"
+        - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
         purge_networks: yes
@@ -468,14 +482,14 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.ombi.rule": "PathPrefix(`/ombi`)"
-          "traefik.http.routers.ombi.entrypoints": "https"
-          "traefik.http.routers.ombi.tls.certresolver": "letsencrypt"
+          "traefik.http.routers.ombi.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.services.ombi.loadbalancer.server.port": "3579"
-          "traefik.http.middlewares.protoheader.headers.customrequestheaders.X-Forwarded-Proto": "https"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.routers.ombi.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.protoheader.headers.customrequestheaders.X-Forwarded-Proto": "{{ traefik_default_scheme }}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
@@ -500,21 +514,21 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.bazarr.rule": "PathPrefix(`/bazarr`)"
-          "traefik.http.routers.bazarr.entrypoints": "https"
-          "traefik.http.routers.bazarr.tls.certresolver": "letsencrypt"
+          "traefik.http.routers.bazarr.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.services.bazarr.loadbalancer.server.port": "6767"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.routers.bazarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["sonarr", "radarr"]
         volumes:
         - /home/docker/docker_data/bazarr/config:/config
-        - /mnt/Storage/Movies:/movies
-        - /mnt/Storage/TV:/tv
+        - "{{ vm_vars.nas.storage_path }}Movies:/movies"
+        - "{{ vm_vars.nas.storage_path }}TV:/tv"
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         purge_networks: yes
@@ -533,13 +547,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.prowlarr.rule": "PathPrefix(`/prowlarr`)"
-          "traefik.http.routers.prowlarr.entrypoints": "https"
-          "traefik.http.routers.prowlarr.tls.certresolver": "letsencrypt"
+          "traefik.http.routers.prowlarr.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.services.prowlarr.loadbalancer.server.port": "9696"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.routers.prowlarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
@@ -562,17 +576,17 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.readarr.rule": "PathPrefix(`/readarr`)"
-          "traefik.http.routers.readarr.entrypoints": "https"
-          "traefik.http.routers.readarr.tls.certresolver": "letsencrypt"
+          "traefik.http.routers.readarr.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.services.readarr.loadbalancer.server.port": "8787"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.routers.readarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         volumes:
         - "/home/docker/docker_data/readarr:/config"
-        - "/mnt/Storage/Books:/books"
+        - "{{ vm_vars.nas.storage_path }}Books:/books"
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
         networks:
@@ -594,13 +608,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.homer.rule": "PathPrefix(`/`)"
-          "traefik.http.routers.homer.tls": "true"
-          "traefik.http.routers.homer.entrypoints": "https"
+          "traefik.http.routers.homer.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.services.homer.loadbalancer.server.port": "8080"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.routers.homer.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"  
         networks:
          - name: docker
@@ -620,12 +634,12 @@
          NMBD: "yes"
         network_mode: host
         volumes:
-        - /mnt/Storage/Movies:/movies
-        - /mnt/Storage/TV:/tv
-        - /mnt/Storage/Music:/music
-        - /mnt/Storage/Downloads:/downloads
-        - /mnt/Storage/Share:/share
-        - /mnt/Storage/files:/files
+        - "{{ vm_vars.nas.storage_path }}Movies:/movies"
+        - "{{ vm_vars.nas.storage_path }}TV:/tv"
+        - "{{ vm_vars.nas.storage_path }}Music:/music"
+        - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
+        - "{{ vm_vars.nas.storage_path }}Share:/share"
+        - "{{ vm_vars.nas.storage_path }}files:/files"
         command:
          - "-s TV;/tv;yes;yes;yes;all;none"
          - "-s Movies;/movies;yes;yes;yes;all;none"
@@ -648,10 +662,11 @@
           "traefik.http.routers.api.rule": "PathPrefix(`/traefik`)"
           "traefik.http.routers.api.entrypoints": "https,http"
           "traefik.http.routers.api.service": "dashboard@internal"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "https"
+          "traefik.http.routers.traefik.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "http"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         image: "traefik:latest"
         network_mode: host
@@ -868,7 +883,7 @@
         mode: "{{ item.mode }}"
       become: yes
       with_items:
-       - { path: "/mnt/Storage", owner: media, group: media, mode: '0744' }
+       - { path: "{{ vm_vars.nas.storage_path }}", owner: media, group: media, mode: '0744' }
        - { path: "/home/docker/docker_data/", owner: media, group: media, mode: '0744' }
        - { path: "/home/docker/docker_data/homer", owner: media, group: media, mode: '0777'}
       register: final_permissions_dir
@@ -890,7 +905,7 @@
 
     - name: Wait for return code
       uri:
-        url: "https://{{ ansible_default_ipv4.address }}:443/{{ item }}"
+        url: "{{ traefik_default_scheme }}://{{ ansible_default_ipv4.address }}:{{ traefik_default_port }}/{{ item }}"
         status_code: 200
         validate_certs: false
       register: result
@@ -905,7 +920,7 @@
 
     - name: Set configurator fact base
       set_fact:
-        cf_string: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p 443 -a {{ vm_vars.api_key }}"
+        cf_string: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p {{ traefik_default_port }} -a {{ vm_vars.api_key }} -s {{ traefik_default_scheme }}"
 
     - name: Add optional vars
       set_fact: 

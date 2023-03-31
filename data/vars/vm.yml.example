@@ -1,6 +1,12 @@
 creds: {guest_pass: mynasinaboxuser, guest_user: mynasinaboxpassword}
 
-nas: { open_subtitles_username: "myusername", open_subtitles_password: "mypassword"}
+nas: { open_subtitles_username: "myusername",
+ open_subtitles_password: "mypassword",
+ storage_path: "/mnt/Storage/",
+ nas_app_username: "nasinabox",
+ nas_app_password: "nasinabox",
+ default_to_ssl: False
+}
 
 api_key: "4nnuqufdm909hthay5rnu0fq8mbix36j"
 

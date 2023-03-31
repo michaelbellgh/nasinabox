@@ -607,14 +607,15 @@ def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key
 def configure_all_apps(vars):
 
 
+    traefik_port = ("443" if vars["traefik_default_scheme"] == "https" else "80")
 
-    sonarr = darr_instance("sonarr", vars['hostname'], vars['port'], "/sonarr", True, True, vars['apikey'], "https")
-    lidarr = darr_instance("lidarr", vars['hostname'], vars['port'], "/lidarr", True, True, vars['apikey'], "https")
-    radarr = darr_instance("radarr", vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], "https")
-    bazarr = darr_instance("bazarr", vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], "https")
-    readarr = darr_instance("readarr", vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], "https")
-    prowlarr_instance = darr_instance("prowlarr", vars['hostname'], vars['port'], "/prowlarr", True, True, vars['apikey'], "https")
-    prowlarr_internal_instance = darr_instance("prowlarr_internal", "prowlarr", 9696, "/prowlarr", False, False, vars['apikey'], "http")
+    sonarr = darr_instance("sonarr", vars['hostname'], vars['port'], "/sonarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
+    lidarr = darr_instance("lidarr", vars['hostname'], vars['port'], "/lidarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
+    radarr = darr_instance("radarr", vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
+    bazarr = darr_instance("bazarr", vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
+    readarr = darr_instance("readarr", vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
+    prowlarr_instance = darr_instance("prowlarr", vars['hostname'], vars['port'], "/prowlarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
+    prowlarr_internal_instance = darr_instance("prowlarr_internal", "prowlarr", 9696, "/prowlarr", False, False, vars['apikey'], vars['traefik_default_scheme'])
 
 
     
@@ -633,17 +634,17 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
-    ombi = ombi_instance(vars["hostname"], 443, "/ombi", vars["apikey"], "https")
+    ombi = ombi_instance(vars["hostname"], traefik_port, "/ombi", vars["apikey"], vars['traefik_default_scheme'])
     if "plex_username" in vars and "plex_password" in vars:
-        ombi_initial_setup_with_plex(vars["hostname"], 443, "/ombi", vars["plex_username"], vars["plex_password"], "https")
+        ombi_initial_setup_with_plex(vars["hostname"], traefik_port, "/ombi", vars["plex_username"], vars["plex_password"], vars['traefik_default_scheme'])
     ombi_upload_sonarr_profiles(ombi, "sonarr", 8989, True, vars["apikey"], False, "/sonarr", 4, 1, 1, 1)
     ombi_upload_radarr_profiles(ombi, "radarr", "7878", vars["apikey"], False, "/radarr", 4, "/movies")
     ombi_upload_lidarr_profiles(ombi, "lidarr", "8686", vars["apikey"], False, "/lidarr", "/music/")
 
-    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
-    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
-    darr_add_all_configured_jacket_indexers(readarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "", categories=[3030, 7020, 8010], api_version="v1")
-    darr_add_all_configured_jacket_indexers(lidarr, vars["apikey"],"https", vars["hostname"], 443, "/jackett", "http", "jackett", 9117, "",categories=[3000,3010,3020,3030,3040], api_version="v1")
+    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"], vars['traefik_default_scheme'], vars["hostname"], traefik_port, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
+    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"], vars['traefik_default_scheme'], vars["hostname"], traefik_port, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
+    darr_add_all_configured_jacket_indexers(readarr, vars["apikey"], vars['traefik_default_scheme'], vars["hostname"], traefik_port, "/jackett", "http", "jackett", 9117, "", categories=[3030, 7020, 8010], api_version="v1")
+    darr_add_all_configured_jacket_indexers(lidarr, vars["apikey"], vars['traefik_default_scheme'], vars["hostname"], traefik_port, "/jackett", "http", "jackett", 9117, "",categories=[3000,3010,3020,3030,3040], api_version="v1")
 
     indexers = prowlarr_get_all_public_indexers(prowlarr_instance, False, prowlarr_instance.api_key)
     prowlarr_add_indexers(prowlarr_instance, False, prowlarr_instance.api_key, indexers)
@@ -663,8 +664,9 @@ def main():
     parser.add_argument("-i", "--hostname", required=True, help="IP Address/Hostname of the *arr clients")
     parser.add_argument("-p", "--port", required=True, help="Port of the *arr clients")
     parser.add_argument("-a", "--apikey", required=True, help="IP Address of the *arr clients")
-    parser.add_argument("--open-subtitles-username", help="OpenSubtitles.org/.com username")
-    parser.add_argument("--open-subtitles-password", help="OpenSubtitles.org/.com password")
+    parser.add_argument("-s", "--traefik-default-scheme", required=False, choices=["http", "https"], default="http", help="Default Traefik scheme")
+    parser.add_argument("--open-subtitles-username", help="OpenSubtitles.org.com username")
+    parser.add_argument("--open-subtitles-password", help="OpenSubtitles.org.com password")
     parser.add_argument("--plex-username", help="Plex username")
     parser.add_argument("--plex-password", help="Plex password")
     args = vars(parser.parse_args())

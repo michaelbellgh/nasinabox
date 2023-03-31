@@ -1,6 +1,6 @@
 ---
 # Homepage configuration
-# See https://fontawesome.com/v5/search for icons options
+# See {{ traefik_default_scheme }}://fontawesome.com/v5/search for icons options
 
 title: "NAS"
 subtitle: "Media Server"
@@ -43,7 +43,7 @@ colors:
 # Optional message
 message:
   url: github.com/michaelbellgh/{{ vm_vars.vminfo.hostname }}.local
-  style: "is-dark" # See https://bulma.io/documentation/components/message/#colors for styling options.
+  style: "is-dark" # See {{ traefik_default_scheme }}://bulma.io/documentation/components/message/#colors for styling options.
   title: "NAS In A Box"
   icon: "fa fa-grin"
   content: "To get started, click a link below"
@@ -53,11 +53,11 @@ message:
 #links:
 #  - name: "Contribute"
 #    icon: "fab fa-github"
-#    url: "https://github.com/bastienwirtz/homer"
+#    url: "{{ traefik_default_scheme }}://github.com/bastienwirtz/homer"
 #    target: "_blank" # optional html a tag target attribute
 #  - name: "Wiki"
 #    icon: "fas fa-book"
-#    url: "https://www.wikipedia.org/"
+#    url: "{{ traefik_default_scheme }}://www.wikipedia.org/"
   # this will link to a second homer page that will load config from additional-page.yml and keep default config values as in config.yml file
   # see url field and assets/additional-page.yml.dist used in this example:
  # - name: "another page!"
@@ -86,56 +86,56 @@ services:
         subtitle: "Browse TV, Movies to download"
         tag: "app"
         keywords: "media tv series movie"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/ombi"
+        url: "{{ traefik_default_scheme }}://{{ vm_vars.vminfo.hostname }}.local/ombi"
         target: "_blank" # optional html a tag target attribute
       - name: "Sonarr"
         logo: "assets/icons/sonarr.png"
         subtitle: "Downloads TV Series"
         tag: "app"
         keywords: "media tv series"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/sonarr"
+        url: "{{ traefik_default_scheme }}://{{ vm_vars.vminfo.hostname }}.local/sonarr"
         target: "_blank" # optional html a tag target attribute
       - name: "Radarr"
         logo: "assets/icons/radarr.png"
         subtitle: "Downloads movies"
         tag: "app"
         keywords: "media tv series"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/radarr"
+        url: "{{ traefik_default_scheme }}://{{ vm_vars.vminfo.hostname }}.local/radarr"
         target: "_blank" # optional html a tag target attribute
       - name: "Lidarr"
         logo: "assets/icons/lidarr.png"
         subtitle: "Downloads music albums"
         tag: "app"
         keywords: "media music mp3"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/lidarr"
+        url: "{{ traefik_default_scheme }}://{{ vm_vars.vminfo.hostname }}.local/lidarr"
         target: "_blank" # optional html a tag target attribute
       - name: "Bazarr"
         logo: "assets/icons/bazarr.png"
         subtitle: "Downloads subtitles for TV shows, movies"
         tag: "app"
         keywords: "media tv movie subtitles"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/bazarr"
+        url: "{{ traefik_default_scheme }}://{{ vm_vars.vminfo.hostname }}.local/bazarr"
         target: "_blank" # optional html a tag target attribute
       - name: "Jackett"
         logo: "assets/icons/jackett.png"
         subtitle: "Helps find downloads for TV shows, movies"
         tag: "app"
         keywords: "media tv movie torrent"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/jackett"
+        url: "{{ traefik_default_scheme }}://{{ vm_vars.vminfo.hostname }}.local/jackett"
         target: "_blank" # optional html a tag target attribute
       - name: "Prowlarr"
         logo: "assets/icons/prowlarr.png"
         subtitle: "Helps find downloads for TV shows, movies"
         tag: "app"
         keywords: "media tv movie torrent"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/prowlarr"
+        url: "{{ traefik_default_scheme }}://{{ vm_vars.vminfo.hostname }}.local/prowlarr"
         target: "_blank" # optional html a tag target attribute
       - name: "Readarr"
         logo: "assets/icons/readarr.png"
         subtitle: "Downloads books"
         tag: "app"
         keywords: "media book ebook"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/readarr"
+        url: "{{ traefik_default_scheme }}://{{ vm_vars.vminfo.hostname }}.local/readarr"
         target: "_blank" # optional html a tag target attribute
   - name: "Torrents"
     icon: "fas fa-cloud"
@@ -145,5 +145,5 @@ services:
         subtitle: "Deluge"
         tag: "app"
         keywords: "plex media movie tv"
-        url: "https://{{ vm_vars.vminfo.hostname }}.local/deluge"
+        url: "{{ traefik_default_scheme }}://{{ vm_vars.vminfo.hostname }}.local/deluge"
         target: "_blank" # optional html a tag target attribute
