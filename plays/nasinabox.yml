@@ -458,6 +458,11 @@
           "traefik.http.routers.sonarr.entrypoints": "{{ traefik_default_scheme }}"
           "traefik.http.routers.sonarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
           "traefik.http.services.sonarr.loadbalancer.server.port": "8989"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
+          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["jackett", "deluge"]
