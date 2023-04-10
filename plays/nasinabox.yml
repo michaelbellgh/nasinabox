@@ -58,10 +58,20 @@
       become: yes
 
 
-    - name: GPG Key
+    - name: GPG Keys
       apt_key:
-        url: https://download.docker.com/linux/ubuntu/gpg
+        url: "{{ item }}"
         state: present
+      with_items:
+       - https://download.docker.com/linux/ubuntu/gpg
+       
+    - name: Download keyrings
+      get_url:
+        url: "{{ item.url }}"
+        dest: "{{ item.dest }}"
+      with_items:
+       - {url: "https://pkgs.tailscale.com/stable/ubuntu/focal.noarmor.gpg", dest: "/usr/share/keyrings/tailscale-archive-keyring.gpg"}
+       - {url: "https://pkgs.tailscale.com/stable/ubuntu/focal.tailscale-keyring.list", dest: "/etc/apt/sources.list.d/tailscale.list"}
 
     - name: Add Docker APT repository
       apt_repository:
@@ -87,6 +97,7 @@
           - parted
           - sqlite
           - open-vm-tools
+          - tailscale
         state: present
       become: yes
 
@@ -280,7 +291,29 @@
       when: storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
 
 
+    - name: Get homer theme
+      ansible.builtin.git:
+        repo: "https://github.com/walkxcode/homer-theme"
+        dest: /tmp/Homer-Theme
+        force: yes
 
+    - name: Make images dir for homer
+      file: 
+        path: "/home/docker/docker_data/homer/images"
+        state: directory
+
+    - name: Copy WalkXCode-Homer theme css
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        remote_src: yes
+        force: yes
+      with_items:
+       - {src: /tmp/Homer-Theme/assets/custom.css, dest: /home/docker/docker_data/homer/walkxcode-homer.css }
+       - {src: /tmp/Homer-Theme/assets/wallpaper.jpeg, dest: /home/docker/docker_data/homer/wallpaper.jpeg }
+       - {src: /tmp/Homer-Theme/assets/wallpaper-light.jpeg, dest: /home/docker/docker_data/homer/wallpaper-light.jpeg }
+       - {src: /tmp/Homer-Theme/assets/manifest.json, dest: /home/docker/docker_data/homer/manifest.json }
+       - {src: /tmp/Homer-Theme/assets/fonts, dest: /home/docker/docker_data/homer/fonts}
 
     - name: Set permissions on Docker Data
       file:
@@ -817,7 +850,7 @@
       copy: 
         dest: "/tmp/ombi.sql"
         content: |
-          update GlobalSettings set Content = '{"BaseUrl":"/ombi","CollectAnalyticData":true,"Wizard":true,"ApiKey":"4nnuqufdm909hthay5rnu0fq8mbix36j","DoNotSendNotificationsForAutoApprove":false,"HideRequestsUsers":false,"DisableHealthChecks":false,"DefaultLanguageCode":"en","AutoDeleteAvailableRequests":false,"AutoDeleteAfterDays":0,"Branch":0,"HasMigratedOldTvDbData":true,"Set":false,"Id":1}' where Id = 1;
+          update GlobalSettings set Content = '{"BaseUrl":"/ombi","CollectAnalyticData":true,"Wizard":true,"ApiKey":"{{ vm_vars.api_key }}","DoNotSendNotificationsForAutoApprove":false,"HideRequestsUsers":false,"DisableHealthChecks":false,"DefaultLanguageCode":"en","AutoDeleteAvailableRequests":false,"AutoDeleteAfterDays":0,"Branch":0,"HasMigratedOldTvDbData":true,"Set":false,"Id":1}' where Id = 1;
         mode: 0777
 
     - name: Set Ombi API key (insert stage)
@@ -965,6 +998,9 @@
       shell: docker restart $(docker ps -q)
       when: restart is defined
 
+    - name: Connect tailscale
+      command: "tailscale up --authkey {{ vm_vars.tailscale_auth_key }}"
+      when: vm_vars.tailscale_auth_key is defined
 
 
 

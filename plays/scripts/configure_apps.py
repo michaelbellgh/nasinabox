@@ -167,7 +167,7 @@ def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, 
     login_fields = {"login": plex_username, "password": plex_password}
     uri = scheme + "://" + hostname + ":" + str(port) + path
 
-    response = requests.get(uri + "/api/v2/Features/", data=json.dumps({"enabled": False, "name": "Movie4KRequests"}), verify=validate_certificates, headers={"content-type" : "application/json"})
+    response = requests.get(uri + "/api/v2/Features/", data=json.dumps({"enabled": True, "name": "Movie4KRequests"}), verify=validate_certificates, headers={"content-type" : "application/json"})
     fields = {"applicationName": None,
         "applicationUrl": None,
         "customCss": None,
@@ -189,14 +189,117 @@ def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, 
 
     if plex_username is not None and plex_password is not None:
         response = requests.post(uri + "/api/v1/Plex/", data=json.dumps(login_fields), verify=validate_certificates, headers={"content-type" : "application/json"})
+
+    
+    user_json = {
+    "alias": "",
+    "claims": [
+        {
+        "value": "AutoApproveMovie",
+        "enabled": False
+        },
+        {
+        "value": "Admin",
+        "enabled": True
+        },
+        {
+        "value": "AutoApproveTv",
+        "enabled": False
+        },
+        {
+        "value": "AutoApproveMusic",
+        "enabled": False
+        },
+        {
+        "value": "RequestMusic",
+        "enabled": False
+        },
+        {
+        "value": "PowerUser",
+        "enabled": False
+        },
+        {
+        "value": "RequestMovie",
+        "enabled": False
+        },
+        {
+        "value": "RequestTv",
+        "enabled": False
+        },
+        {
+        "value": "Disabled",
+        "enabled": False
+        },
+        {
+        "value": "ReceivesNewsletter",
+        "enabled": False
+        },
+        {
+        "value": "ManageOwnRequests",
+        "enabled": False
+        },
+        {
+        "value": "EditCustomPage",
+        "enabled": False
+        }
+    ],
+    "emailAddress": "",
+    "id": "",
+    "password": local_password,
+    "userName": local_username,
+    "userType": 1,
+    "hasLoggedIn": False,
+    "lastLoggedIn": "2023-00-00T00:00:00.000Z",
+    "episodeRequestLimit": 0,
+    "movieRequestLimit": 0,
+    "userAccessToken": "",
+    "musicRequestLimit": 0,
+    "episodeRequestQuota": None,
+    "movieRequestQuota": None,
+    "language": None,
+    "userAlias": "",
+    "streamingCountry": "AU",
+    "userQualityProfiles": {
+        "radarrQualityProfile": 0,
+        "radarrRootPath": 0,
+        "sonarrQualityProfile": 0,
+        "sonarrQualityProfileAnime": 0,
+        "sonarrRootPath": 0,
+        "sonarrRootPathAnime": 0
+    },
+    "musicRequestQuota": None
+    }
+
+    
+    custom_json = {
+    "applicationName": "Ombi",
+    "applicationUrl": "http://" + hostname + "/ombi",
+    "customCss": None,
+    "enableCustomDonations": False,
+    "customDonationUrl": None,
+    "customDonationMessage": None,
+    "logo": None,
+    "recentlyAddedPage": False,
+    "useCustomPage": False,
+    "hideAvailableFromDiscover": False,
+    "favicon": None,
+    "hideAvailableRecentlyRequested": False,
+    "id": 0
+    }
+    
+
+
     response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"login": local_username, "password": local_password,"usePlexAdminAccount": bool(plex_username is not None and plex_password is not None)}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
-    response = requests.post(uri + "/api/v2/wizard/config", data=json.dumps({"applicationName":"Ombi - DenNetwork","applicationUrl":None,"logo":None}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
+
+    #response = requests.post(uri + "/api/v2/wizard/config", data=json.dumps({"applicationName":"Ombi - DenNetwork","applicationUrl":None,"logo":None}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
+    response = requests.post(uri + "/api/v1/Settings/customization", data=json.dumps(custom_json), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
+
     response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"username":local_username,"password": local_password,"usePlexAdminAccount": bool(plex_username is not None and plex_password is not None)}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
 
-    response = requests.post(uri + "/api/v2/Features/enable", data=json.dumps({"name": "Movie4KRequests", "enabled": False}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
+    response = requests.post(uri + "/api/v2/Features/enable", data=json.dumps({"name": "Movie4KRequests", "enabled": True}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
     response = requests.post(uri + "/api/v1/Settings/Authentication", data=json.dumps({"allowNoPassword":True,"requiredDigit":None,"requiredLength":0,"requiredLowercase":None,"requireNonAlphanumeric":False,"requireUppercase":False,"enableOAuth":False,"enableHeaderAuth":False,"headerAuthVariable":None}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
 
-
+    #response = requests.post(uri + "api/v1/Identity/", data=json.dumps(user_json), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
 
 
 

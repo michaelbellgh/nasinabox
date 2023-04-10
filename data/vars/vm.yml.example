@@ -11,10 +11,15 @@ nas: { open_subtitles_username: "myusername",
 local_username: "myappusername"
 local_password: "myapppassword"
 
-ignore
 
 #plex_username: "myplexusername"
 #plex_password: "myplexpassword"
+
+#homer_theme: default
+# Can be default or sui
+
+#tailscale_auth_key: "tailscale auth key here"
+#Optional support for joining device to tailscale network
 
 api_key: "4nnuqufdm909hthay5rnu0fq8mbix36j"
 
