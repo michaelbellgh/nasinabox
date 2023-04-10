@@ -297,10 +297,6 @@
         dest: /tmp/Homer-Theme
         force: yes
 
-    - name: Make images dir for homer
-      file: 
-        path: "/home/docker/docker_data/homer/images"
-        state: directory
 
     - name: Copy WalkXCode-Homer theme css
       copy:
@@ -965,14 +961,18 @@
     - name: Add optional vars
       set_fact: 
         cf_string: "{{ cf_string + ' '  + item.key + ' ' + item.value }}"
-      when: item.value is defined
+      when: item != None
       with_items:
-       - {key: "--open-subtitles-username", value: "{{ vm_vars.open_subtitles_username | quote}}"}	
-       - {key: "--open-subtitles-password", value: "{{ vm_vars.open_subtitles_password | quote }}"}	
-       - {key: "--plex-username", value: "{{ vm_vars.plex_username | quote }}"}	
-       - {key: "--plex-password", value: "{{ vm_vars.plex_password | quote }}"}	
-       - {key: "--app-username", value: "{{ vm_vars.local_username | quote}}"}
+       - {key: "--open-subtitles-username", value: "{{ vm_vars.nas.open_subtitles_username | quote }}"}
+       - {key: "--open-subtitles-password", value: "{{ vm_vars.nas.open_subtitles_password | quote }}"}
+       - {key: "--plex-username", value: "{{ vm_vars.plex_username | quote }}"}
+       - {key: "--plex-password", value: "{{ vm_vars.plex_password | quote }}"}
+       - {key: "--app-username", value: "{{ vm_vars.local_username | quote }}"}
        - {key: "--app-password", value: "{{ vm_vars.local_password | quote }}"}
+
+    - name: debug
+      debug:
+        msg: "{{ cf_string }}"
 
 
     - name: Run configurator (with opensubtitles support)
@@ -997,6 +997,7 @@
     - name: Restart all containers
       shell: docker restart $(docker ps -q)
       when: restart is defined
+
 
     - name: Connect tailscale
       command: "tailscale up --authkey {{ vm_vars.tailscale_auth_key }}"

@@ -12,13 +12,13 @@ local_username: "myappusername"
 local_password: "myapppassword"
 
 
-#plex_username: "myplexusername"
-#plex_password: "myplexpassword"
+plex_username: null
+plex_password: null
 
 #homer_theme: default
 # Can be default or sui
 
-#tailscale_auth_key: "tailscale auth key here"
+tailscale_auth_key: null
 #Optional support for joining device to tailscale network
 
 api_key: "4nnuqufdm909hthay5rnu0fq8mbix36j"
