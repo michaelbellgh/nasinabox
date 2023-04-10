@@ -8,6 +8,14 @@ nas: { open_subtitles_username: "myusername",
  default_to_ssl: False
 }
 
+local_username: "myappusername"
+local_password: "myapppassword"
+
+ignore
+
+#plex_username: "myplexusername"
+#plex_password: "myplexpassword"
+
 api_key: "4nnuqufdm909hthay5rnu0fq8mbix36j"
 
 vminfo:

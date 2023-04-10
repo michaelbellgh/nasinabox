@@ -163,7 +163,7 @@ def ombi_upload_lidarr_profiles(ombi: ombi_instance, lidarr_hostname: str, lidar
     print(response.text)
 
 
-def ombi_initial_setup_with_plex(hostname: str, port: int, path: str, plex_username: str, plex_password: str, api_key: str, scheme: str="https", validate_certificates: bool=False):
+def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, plex_password: str, api_key: str, scheme: str="https", validate_certificates: bool=False, local_username: str="admin", local_password: str="password"):
     login_fields = {"login": plex_username, "password": plex_password}
     uri = scheme + "://" + hostname + ":" + str(port) + path
 
@@ -187,10 +187,11 @@ def ombi_initial_setup_with_plex(hostname: str, port: int, path: str, plex_usern
         response = requests.get(uri + url, verify=validate_certificates, headers={"content-type" : "application/json"})
 
 
-    response = requests.post(uri + "/api/v1/Plex/", data=json.dumps(login_fields), verify=validate_certificates, headers={"content-type" : "application/json"})
-    response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"login":"","password":"","usePlexAdminAccount":True}), verify=validate_certificates, headers={"content-type" : "application/json"})
-    response = requests.post(uri + "/api/v2/wizard/config", data=json.dumps({"applicationName":"Ombi - DenNetwork","applicationUrl":None,"logo":None}), verify=validate_certificates, headers={"content-type" : "application/json"})
-    response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"username":"admin","password":"admin","usePlexAdminAccount":False}), verify=validate_certificates, headers={"content-type" : "application/json"})
+    if plex_username is not None and plex_password is not None:
+        response = requests.post(uri + "/api/v1/Plex/", data=json.dumps(login_fields), verify=validate_certificates, headers={"content-type" : "application/json"})
+    response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"login": local_username, "password": local_password,"usePlexAdminAccount": bool(plex_username is not None and plex_password is not None)}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
+    response = requests.post(uri + "/api/v2/wizard/config", data=json.dumps({"applicationName":"Ombi - DenNetwork","applicationUrl":None,"logo":None}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
+    response = requests.post(uri + "/api/v1/Identity/Wizard/", data=json.dumps({"username":local_username,"password": local_password,"usePlexAdminAccount": bool(plex_username is not None and plex_password is not None)}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
 
     response = requests.post(uri + "/api/v2/Features/enable", data=json.dumps({"name": "Movie4KRequests", "enabled": False}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
     response = requests.post(uri + "/api/v1/Settings/Authentication", data=json.dumps({"allowNoPassword":True,"requiredDigit":None,"requiredLength":0,"requiredLowercase":None,"requireNonAlphanumeric":False,"requireUppercase":False,"enableOAuth":False,"enableHeaderAuth":False,"headerAuthVariable":None}), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
@@ -245,15 +246,13 @@ def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: s
 
 
 def bazarr_configure_english_providers(darr: darr_instance, open_subtitles_username: str=None, open_subtitles_password: str=None, validate_certs=False):
-    providers = ["betaseries", "opensubtitles", "opensubtitlescom", "subscenter", "supersubtitles", "tvsubtitles", "yifysubtitles"]
+    providers = ["betaseries", "opensubtitlescom", "subscenter", "supersubtitles", "tvsubtitles", "yifysubtitles"]
     body = []
 
     for provider in providers:
         body.append(("settings-general-enabled_providers", provider))
 
     if open_subtitles_username and open_subtitles_password:
-        body.append(("settings-opensubtitles-username", open_subtitles_username))
-        body.append(("settings-opensubtitles-password", open_subtitles_password))
         body.append(("settings-opensubtitlescom-username", open_subtitles_username))
         body.append(("settings-opensubtitlescom-password", open_subtitles_password))
         body.append(("settings-opensubtitles-ssl", "false"))
@@ -634,9 +633,9 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
-    ombi = ombi_instance(vars["hostname"], traefik_port, "/ombi", vars["apikey"], vars['traefik_default_scheme'])
+    ombi = ombi_instance(vars["hostname"], traefik_port, "/ombi", vars["apikey"], scheme=vars['traefik_default_scheme'])
     if "plex_username" in vars and "plex_password" in vars:
-        ombi_initial_setup_with_plex(vars["hostname"], traefik_port, "/ombi", vars["plex_username"], vars["plex_password"], vars['traefik_default_scheme'])
+        ombi_initial_setup(hostname=vars["hostname"], port=traefik_port, path="/ombi", plex_username=vars["plex_username"], plex_password=vars["plex_password"],  api_key=vars["apikey"], scheme=vars["traefik_default_scheme"], validate_certificates=False,  local_username=vars["app_username"], local_password=vars["app_password"]) 
     ombi_upload_sonarr_profiles(ombi, "sonarr", 8989, True, vars["apikey"], False, "/sonarr", 4, 1, 1, 1)
     ombi_upload_radarr_profiles(ombi, "radarr", "7878", vars["apikey"], False, "/radarr", 4, "/movies")
     ombi_upload_lidarr_profiles(ombi, "lidarr", "8686", vars["apikey"], False, "/lidarr", "/music/")
@@ -669,6 +668,8 @@ def main():
     parser.add_argument("--open-subtitles-password", help="OpenSubtitles.org.com password")
     parser.add_argument("--plex-username", help="Plex username")
     parser.add_argument("--plex-password", help="Plex password")
+    parser.add_argument("--app-username", help="Username for apps when required")
+    parser.add_argument("--app-password", help="Password for apps when required")
     args = vars(parser.parse_args())
 
     configure_all_apps(args)

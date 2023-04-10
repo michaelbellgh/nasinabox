@@ -652,6 +652,7 @@
          - "-s Music;/music;yes;no;yes;all;none"
          - "-s Share;/share;yes;no;yes;all;none"
          - "-s Files;/files;yes;no;yes;all;none"
+        command_handling: correct
         restart_policy: unless-stopped
         purge_networks: yes
 
@@ -759,9 +760,10 @@
         path: "{{ item.path }}"
       with_items:
        - { regexp: '"/root/Downloads"', line: '"/downloads"', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"max_connections_global\"\s*\:\s*\d+', line: '"max_connections_global": 500', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"max_active_limit\"\s*\:\s*\d+', line: '"max_active_limit": 20', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"max_active_seeding\"\s*\:\s*\d+', line: '"max_active_seeding": 5', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"max_connections_global\"\s*\:\s*\d+', line: '"max_connections_global": 5000', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"max_active_limit\"\s*\:\s*\d+', line: '"max_active_limit": 30', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"max_active_limit\"\s*\:\s*\d+', line: '"max_active_limit": 30', path: "/home/docker/docker_data/deluge/config/core.conf"}
+       - { regexp: '\"max_active_downloading\"\s*\:\s*\d+', line: '"max_active_downloading": 30', path: "/home/docker/docker_data/deluge/config/core.conf"}
        - { regexp: '\"share_ratio_limit\"\s*\:\s*[\d\.]+', line: '"share_ratio_limit": 2.0', path: "/home/docker/docker_data/deluge/config/core.conf"}
        - { regexp: '\"stop_seed_at_ratio\"\s*\:\s*\d+', line: '"stop_seed_at_ratio": true', path: "/home/docker/docker_data/deluge/config/core.conf"}
        - { regexp: '\"stop_seed_ratio\"\s*\:\s*[\d\.]+', line: '"stop_seed_ratio": 2.0', path: "/home/docker/docker_data/deluge/config/core.conf"}
@@ -935,7 +937,9 @@
        - {key: "--open-subtitles-username", value: "{{ vm_vars.open_subtitles_username | quote}}"}	
        - {key: "--open-subtitles-password", value: "{{ vm_vars.open_subtitles_password | quote }}"}	
        - {key: "--plex-username", value: "{{ vm_vars.plex_username | quote }}"}	
-       - {key: "--plex-password", value: "{{vm_vars.plex_password | quote }}"}	
+       - {key: "--plex-password", value: "{{ vm_vars.plex_password | quote }}"}	
+       - {key: "--app-username", value: "{{ vm_vars.local_username | quote}}"}
+       - {key: "--app-password", value: "{{ vm_vars.local_password | quote }}"}
 
 
     - name: Run configurator (with opensubtitles support)
