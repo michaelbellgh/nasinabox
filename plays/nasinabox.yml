@@ -46,8 +46,7 @@
       register: set_system_settings
     
     - name: Set system settings (apply)
-      command: "sysctl --system"
-      when: set_system_settings.changed
+      command: "sysctl -p"
     
 
     - name: Upgrade packages and distro
@@ -98,6 +97,7 @@
           - sqlite
           - open-vm-tools
           - tailscale
+          - zfsutils
         state: present
       become: yes
 
@@ -241,11 +241,13 @@
       stat:
         path: /dev/sdb
       register: storage_exists
+      when: vm_vars.zfs_drives |length == 0
 
     - name: Check if partition exists
       stat:
         path: /dev/sdb1
       register: partition_exists
+      when: vm_vars.zfs_drives |length == 0
 
 
     - name: Make partition
@@ -253,13 +255,14 @@
         device: /dev/sdb
         number: 1
         state: present
-      when: storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
+      when: "vm_vars.zfs_drives |length == 0 and storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool"
+      
 
     - name: Make filesystem
       filesystem:
         fstype: ext4
         dev: /dev/sdb1
-      when: storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
+      when:  vm_vars.zfs_drives |length == 0 and storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
 
     - name: Mount drives
       mount:
@@ -269,18 +272,49 @@
         fstype: ext4
       with_items: 
        - { path: "{{ vm_vars.nas.storage_path }}", src: "/dev/sdb1"}
-      when: storage_exists.stat.exists|bool
+      when: vm_vars.zfs_drives |length == 0 and storage_exists.stat.exists|bool
+
+    - name: Get zpool info
+      command: "zfs list"
+      register: zfacts
+      when: vm_vars.zfs_drives |length > 0
+      
+    - name: Try import NAS pool
+      command: "zpool import NAS -f"
+      when: '"{{ vm_vars.nas.storage_path }}" not in zfacts.stdout'
+      register: try_import
+      ignore_errors: yes
+                                                                                     
+    - name: Get ZFS pools
+      command: "zfs list"
+      register: zfs_pools
+      when: vm_vars.zfs_drives |length > 0               
+                                                                                     
+    - name: Make ZFS pool
+      command: "zpool create NAS {{ vm_vars.zfs_type }} {{ vm_vars.zfs_drives | join(' ') }}"
+      when: vm_vars.zfs_drives |length > 0 and 'NAS' not in zfacts.stdout                                     
+
+    - name: Make ZFS pool (force)
+      command: "zpool create NAS raidz {{ zfs_list }} -f"
+      when: '"NAS" not in zfs_pools.stdout and force is defined'
+
+
+    - name: Mount ZFS pool
+      command: "zfs set mountpoint={{ vm_vars.nas.storage_path }} NAS"
+      when: vm_vars.zfs_drives is defined and vm_vars.zfs_drives |length > 0
 
     - name: Make mount point
       file: 
         path: "{{ vm_vars.nas.storage_path }}"
         state: directory
+      when: vm_vars.zfs_drives |length == 0
 
     - name: Fallback to fix mount module issue
       command: "mount {{ item }}"
       with_items: 
        - "{{ vm_vars.nas.storage_path }}"
       ignore_errors: yes
+      when: vm_vars.zfs_drives |length == 0
 
     - name: Set permissions on Storage
       file:
@@ -288,7 +322,6 @@
         mode: '644'
         state: directory
       become: yes
-      when: storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
 
 
     - name: Get homer theme

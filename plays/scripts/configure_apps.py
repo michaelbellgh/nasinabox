@@ -153,7 +153,8 @@ def ombi_upload_sonarr_profiles(ombi: ombi_instance, sonarr_hostname: str, sonar
     print(response.text)
 
 def ombi_upload_radarr_profiles(ombi: ombi_instance, radarr_hostname: str, radarr_port: int, radarr_api_key: str, ssl: bool, base_url: str, quality_profile: int, root_dir: str):
-    fields = {"radarr":{"enabled":True,"apiKey":radarr_api_key,"defaultQualityProfile":quality_profile,"defaultRootPath":root_dir,"ssl":ssl,"subDir":base_url,"ip":radarr_hostname,"port":radarr_port,"addOnly":False,"minimumAvailability":"Released","scanForAvailability":False},"radarr4K":{"enabled":False,"apiKey":radarr_api_key,"defaultQualityProfile":0,"defaultRootPath":root_dir,"ssl":ssl,"subDir":None,"ip":radarr_hostname,"port":radarr_port,"addOnly":False,"minimumAvailability":None,"scanForAvailability":False}}
+    fields = {"radarr":{"enabled":True,"apiKey":radarr_api_key,"defaultQualityProfile":quality_profile,"defaultRootPath":root_dir,"ssl":ssl,"subDir":base_url,"ip":radarr_hostname,"port":radarr_port,"addOnly":False,"minimumAvailability":"Released","scanForAvailability":False},
+               "radarr4K":{"enabled":False,"apiKey":radarr_api_key,"defaultQualityProfile":0,"defaultRootPath":root_dir,"ssl":ssl,"subDir":None,"ip":radarr_hostname,"port":radarr_port,"addOnly":False,"minimumAvailability":None,"scanForAvailability":False}}
     response = ombi_api_request(ombi, "/api/v1/Settings/Radarr", body=json.dumps(fields))
     print(response.text)
 
@@ -174,6 +175,7 @@ def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, 
     #for url in ["/api/v1/Settings/customization", "/translations/en.json?v=92360805", "/api/v1/Settings/voteenabled", "/api/v1/Settings/issuesenabled", "/api/v1/Settings/LandingPage",
     #         "/api/v1/status/Wizard/", "/api/v1/Settings/Authentication", "/v1/Settings/clientid", "/api/v1/Settings/clientid"]:
     #    response = requests.get(uri + url, verify=validate_certificates, headers={"content-type" : "application/json"})
+    #Now not needed - just need to finish via the Wizard endpoint below
 
 
     
@@ -197,6 +199,7 @@ def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, 
         "headerAuthVariable": None,
         "headerAuthCreateUser": False
         })
+    resp = ombi_std_post("/api/v2/Features/enable", [{"name":"Movie4KRequests","enabled": True},{"name":"OldTrendingSource","enabled": False}])
 
 
 
