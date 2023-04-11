@@ -176,105 +176,7 @@ def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, 
     #    response = requests.get(uri + url, verify=validate_certificates, headers={"content-type" : "application/json"})
 
 
-    if plex_username is not None and plex_password is not None:
-        response = requests.post(uri + "/api/v1/Plex/", data=json.dumps(login_fields), verify=validate_certificates, headers={"content-type" : "application/json"})
-
     
-    user_json = {
-    "alias": "",
-    "claims": [
-        {
-      "value": "AutoApproveMovie",
-      "enabled": False
-    },
-    {
-      "value": "Admin",
-      "enabled": True
-    },
-    {
-      "value": "AutoApproveTv",
-      "enabled": False
-    },
-    {
-      "value": "AutoApproveMusic",
-      "enabled": False
-    },
-    {
-      "value": "RequestMusic",
-      "enabled": False
-    },
-    {
-      "value": "PowerUser",
-      "enabled": False
-    },
-    {
-      "value": "RequestMovie",
-      "enabled": False
-    },
-    {
-      "value": "RequestTv",
-      "enabled": False
-    },
-    {
-      "value": "Disabled",
-      "enabled": False
-    },
-    {
-      "value": "ReceivesNewsletter",
-      "enabled": False
-    },
-    {
-      "value": "ManageOwnRequests",
-      "enabled": False
-    },
-    {
-      "value": "EditCustomPage",
-      "enabled": False
-    }
-    ],
-    "emailAddress": "",
-    "id": "",
-    "password": local_password,
-    "userName": local_username,
-    "userType": 1,
-    "hasLoggedIn": True,
-    "lastLoggedIn": datetime.datetime.now().isoformat(),
-    "episodeRequestLimit": 0,
-    "movieRequestLimit": 0,
-    "userAccessToken": "",
-    "musicRequestLimit": 0,
-    "episodeRequestQuota": None,
-    "movieRequestQuota": None,
-    "language": None,
-    "userAlias": "",
-    "streamingCountry": "AU",
-    "userQualityProfiles": {
-        "radarrQualityProfile": 0,
-        "radarrRootPath": 0,
-        "sonarrQualityProfile": 0,
-        "sonarrQualityProfileAnime": 0,
-        "sonarrRootPath": 0,
-        "sonarrRootPathAnime": 0
-    },
-    "musicRequestQuota": None
-    }
-
-    
-    custom_json = {
-    "applicationName": "Ombi",
-    "applicationUrl": "http://" + hostname + "/ombi",
-    "customCss": None,
-    "enableCustomDonations": False,
-    "customDonationUrl": None,
-    "customDonationMessage": None,
-    "logo": None,
-    "recentlyAddedPage": False,
-    "useCustomPage": False,
-    "hideAvailableFromDiscover": False,
-    "favicon": None,
-    "hideAvailableRecentlyRequested": False,
-    "id": 0
-    }
     
     def ombi_std_post(endpoint, data):
         return requests.post(uri + endpoint, data=json.dumps(data), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
@@ -282,27 +184,19 @@ def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, 
     def ombi_std_put(endpoint, data):
         return requests.put(uri + endpoint, data=json.dumps(data), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
 
-    response = ombi_std_post("/api/v2/Features/enable", {"enabled": True, "name": "Movie4KRequests"})
-    response = ombi_std_post("/api/v1/Settings/customization", custom_json)
-    response = ombi_std_post("/api/v1/Identity/", user_json)
-    response = ombi_std_put("/api/v1/Identity/", user_json)
-
-    auth_json = {
-    "allowNoPassword": True,
-    "requiredDigit": None,
-    "requiredLength": 0,
-    "requiredLowercase": None,
-    "requireNonAlphanumeric": False,
-    "requireUppercase": False,
-    "enableOAuth": False,
-    "enableHeaderAuth": False,
-    "headerAuthVariable": None,
-    "headerAuthCreateUser": False
-    }
-
-    ombi_std_post("/api/v1/Settings/Authentication", auth_json)
-
-
+    resp = ombi_std_post("/api/v1/Identity/Wizard/", {"username": local_username, "password": local_password, "usePlexAdminAccount": False})
+    resp = ombi_std_post("/api/v1/Settings/Authentication", {
+        "allowNoPassword": True,
+        "requiredDigit": None,
+        "requiredLength": 0,
+        "requiredLowercase": None,
+        "requireNonAlphanumeric": False,
+        "requireUppercase": False,
+        "enableOAuth": False,
+        "enableHeaderAuth": False,
+        "headerAuthVariable": None,
+        "headerAuthCreateUser": False
+        })
 
 
 
