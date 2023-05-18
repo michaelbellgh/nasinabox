@@ -296,7 +296,7 @@
 
     - name: Make ZFS pool (force)
       command: "zpool create NAS raidz {{ zfs_list }} -f"
-      when: '"NAS" not in zfs_pools.stdout and force is defined'
+      when: vm_vars.zfs_drives |length > 0 and ('NAS' not in zfs_pools.stdout and force is defined)
 
 
     - name: Mount ZFS pool
@@ -837,6 +837,7 @@
         name: deluge
         state: started
         restart: yes
+        comparisons: { "*": "ignore" }
       become: yes
       when: not deluge_web_conf.stat.exists
 
@@ -927,6 +928,7 @@
         name: "{{ item }}"
         state: started
         restart: yes
+        comparisons: {"*": "ignore"}
       with_items: ["lidarr", "sonarr", "radarr", "bazarr", "readarr", "jackett", "deluge", "ombi", "prowlarr"]
       when: url_base_output.changed or api_change_output.changed
     
