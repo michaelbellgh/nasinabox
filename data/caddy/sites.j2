@@ -1,0 +1,58 @@
+{
+	"admin": {
+		"disabled": false,
+		"listen": "{{ cd_admin_address }}",
+		"enforce_origin": false,
+		"origins": [""],
+		"config": {
+			"persist": false
+		},
+		"identity": {
+			"identifiers": {{ cd_identifiers }}
+		},
+		"remote": {
+			"listen": "{{ cd_admin_listen }}",
+			"access_control": [{
+				"public_keys": [""],
+				"permissions": [{
+					"paths": [""],
+					"methods": [""]
+				}]
+			}]
+		}
+	},
+	"logging": {
+		"sink": {
+			"writer": {"output": "stdout"}
+		},
+		"logs": {
+			"": {
+				"writer": {"output": "stdout"},
+				"encoder": 
+                {
+                    "format": "console",
+                    "message_key": "",
+                    "level_key": "",
+                    "time_key": "",
+                    "name_key": "",
+                    "caller_key": "",
+                    "stacktrace_key": "",
+                    "line_ending": "",
+                    "time_format": "",
+                    "time_local": false,
+                    "duration_format": "",
+                    "level_format": ""
+                },
+				"level": "",
+				"sampling": {
+					"interval": 0,
+					"first": 0,
+					"thereafter": 0
+				},
+				"include": [""],
+				"exclude": [""]
+			}
+		}
+	},
+	"storage": {"module": "file_system", "root": "/logs/"},
+}

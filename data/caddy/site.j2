@@ -1,0 +1,23 @@
+{
+	"apps": {
+		"http": {
+			"servers": {
+				"{{ server_name }}": {
+					"listen": [":{{ listen_port }}"],
+					"routes": [
+						{
+							"match": [{"path": ["{{ server_path }}"]}],
+							"handle": [{
+								"handler": "reverse_proxy",
+								"root": "/var/www",
+                                "upstreams": [{
+                                    "dial": "{{ dial_address }}"
+                                }]
+							}]
+						}
+					]
+				}
+			}
+		}
+	}
+}

@@ -25,6 +25,7 @@
         mode: '0744'
       with_items:
        - "/home/docker/docker_data/traefik/"
+       - "/home/docker/docker_data/caddy"
        - "/var/www/ssl"
        - "/home/docker/docker_data/jackett/config/Jackett/"
 
@@ -322,6 +323,27 @@
         mode: '644'
         state: directory
       become: yes
+
+    - name: Template sites
+      template:
+        src: ../data/caddy/sites.yml
+        dest: /home/docker/docker_data/caddy/sites.json
+        vars: 
+          cd_admin_address: "localhost:80"
+          cd_identifiers: ["localhost", "{{ vm_vars.vm_info.hostname }}"]
+          cd_admin_listen: "localhost:5151"
+
+    - name: Generate apps config
+      template: 
+        src: ../data/caddy/site.yml
+        dest: "/home/docker/docker_data/caddy/{{ item.name }}.json"
+      vars:
+        server_name: "{{ item.name }}"
+        listen_address: 5001
+        server_path: "/{{ item.name }}"
+        dial_address: "{{ item.dial }}"
+      with_items: 
+       - {name: "sonarr", dial: "sonarr:8989" }
 
 
     - name: Get homer theme
@@ -745,6 +767,27 @@
         - "/home/docker/docker_data/traefik/traefik.yml:/traefik.yml"
         - "/home/docker/docker_data/traefik/certs.yml:/certs.yml"
         - "/home/docker/docker_data/traefik/acme.json:/acme.json"
+        - "/root/webca.crt:/webca.crt"
+        - "/root/webca.pem:/webca.pem"
+        purge_networks: yes
+      tags: 
+      - "traefik"
+
+    - name: Run caddy
+      docker_container:
+        name: caddy
+        published_ports: ["5000:80"]
+        recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_readarr.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
+        image: "caddy:latest"
+        networks:
+         - name: docker_ext-dmz
+           ipv4_address: "10.0.50.81"
+         - name: docker_comms
+        restart_policy: unless-stopped
+        volumes:
+        - "/var/run/docker.sock:/var/run/docker.sock"
+        - "/var/www/ssl/:/ssl"
+        - "/home/docker/docker_data/caddy:/data"
         - "/root/webca.crt:/webca.crt"
         - "/root/webca.pem:/webca.pem"
         purge_networks: yes
