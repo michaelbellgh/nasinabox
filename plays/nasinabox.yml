@@ -26,6 +26,9 @@
       with_items:
        - "/home/docker/docker_data/traefik/"
        - "/home/docker/docker_data/caddy"
+       - "/home/docker/docker_data/caddy/data"
+       - "/home/docker/docker_data/caddy/config"
+       - "/home/docker/docker_data/caddy/config/caddy"
        - "/var/www/ssl"
        - "/home/docker/docker_data/jackett/config/Jackett/"
 
@@ -95,19 +98,12 @@
           - avahi-daemon
           - unattended-upgrades
           - parted
-          - sqlite
+          - sqlite3
           - open-vm-tools
           - tailscale
           - zfsutils
         state: present
       become: yes
-
-    - name: Upgrade pip for python3
-      pip:
-        name:
-          - pip
-          - docker-py
-        executable: "/usr/bin/pip3"
 
     - name: create root key
       openssl_privatekey:
@@ -170,16 +166,16 @@
        - { src: "/tmp/webca.pem", dest: "/root/webca.pem"}
       when: root_key.changed
 
-    - name: Set Traefik default port (if ssl)
+    - name: Set caddy default port (if ssl)
       set_fact: 
-        traefik_default_port: "443"
-        traefik_default_scheme: "https"
+        caddy_default_port: "443"
+        caddy_default_scheme: "https"
       when: vm_vars.nas.default_to_ssl is defined and vm_vars.nas.default_to_ssl
 
-    - name: Set Traefik default port (if not ssl)
+    - name: Set Caddy default port (if not ssl)
       set_fact:
-        traefik_default_port: "80"
-        traefik_default_scheme: "http"
+        caddy_default_port: "80"
+        caddy_default_scheme: "http"
       when: vm_vars.nas.default_to_ssl is not defined or (vm_vars.nas.default_to_ssl is defined and not vm_vars.nas.default_to_ssl)
         
 
@@ -222,6 +218,7 @@
       community.general.docker_network:
         name: docker
 
+
     - name: Add groups
       group:
         name: media
@@ -242,13 +239,13 @@
       stat:
         path: /dev/sdb
       register: storage_exists
-      when: vm_vars.zfs_drives |length == 0
+      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length == 0)
 
     - name: Check if partition exists
       stat:
         path: /dev/sdb1
       register: partition_exists
-      when: vm_vars.zfs_drives |length == 0
+      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length == 0)
 
 
     - name: Make partition
@@ -256,14 +253,14 @@
         device: /dev/sdb
         number: 1
         state: present
-      when: "vm_vars.zfs_drives |length == 0 and storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool"
+      when: vm_vars.zfs_drives is defined and ("vm_vars.zfs_drives |length == 0 and storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool")
       
 
     - name: Make filesystem
       filesystem:
         fstype: ext4
         dev: /dev/sdb1
-      when:  vm_vars.zfs_drives |length == 0 and storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool
+      when:  vm_vars.zfs_drives is defined and ("vm_vars.zfs_drives is|length == 0 and storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool")
 
     - name: Mount drives
       mount:
@@ -273,49 +270,49 @@
         fstype: ext4
       with_items: 
        - { path: "{{ vm_vars.nas.storage_path }}", src: "/dev/sdb1"}
-      when: vm_vars.zfs_drives |length == 0 and storage_exists.stat.exists|bool
+      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length == 0 and storage_exists.stat.exists|bool)
 
     - name: Get zpool info
       command: "zfs list"
       register: zfacts
-      when: vm_vars.zfs_drives |length > 0
+      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length > 0)
       
     - name: Try import NAS pool
       command: "zpool import NAS -f"
-      when: '"{{ vm_vars.nas.storage_path }}" not in zfacts.stdout'
+      when: 'vm_vars.zfs_drives is defined and "{{ vm_vars.nas.storage_path }}" not in zfacts.stdout'
       register: try_import
       ignore_errors: yes
                                                                                      
     - name: Get ZFS pools
       command: "zfs list"
       register: zfs_pools
-      when: vm_vars.zfs_drives |length > 0               
+      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length > 0)           
                                                                                      
     - name: Make ZFS pool
       command: "zpool create NAS {{ vm_vars.zfs_type }} {{ vm_vars.zfs_drives | join(' ') }}"
-      when: vm_vars.zfs_drives |length > 0 and 'NAS' not in zfacts.stdout                                     
+      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length > 0 and 'NAS' not in zfacts.stdout)                                   
 
     - name: Make ZFS pool (force)
       command: "zpool create NAS raidz {{ zfs_list }} -f"
-      when: vm_vars.zfs_drives |length > 0 and ('NAS' not in zfs_pools.stdout and force is defined)
+      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length > 0 and ('NAS' not in zfs_pools.stdout and force is defined))
 
 
     - name: Mount ZFS pool
       command: "zfs set mountpoint={{ vm_vars.nas.storage_path }} NAS"
-      when: vm_vars.zfs_drives is defined and vm_vars.zfs_drives |length > 0
+      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives is defined and vm_vars.zfs_drives |length > 0)
 
     - name: Make mount point
       file: 
         path: "{{ vm_vars.nas.storage_path }}"
         state: directory
-      when: vm_vars.zfs_drives |length == 0
+      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length == 0)
 
     - name: Fallback to fix mount module issue
       command: "mount {{ item }}"
       with_items: 
        - "{{ vm_vars.nas.storage_path }}"
       ignore_errors: yes
-      when: vm_vars.zfs_drives |length == 0
+      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length == 0)
 
     - name: Set permissions on Storage
       file:
@@ -326,24 +323,19 @@
 
     - name: Template sites
       template:
-        src: ../data/caddy/sites.yml
-        dest: /home/docker/docker_data/caddy/sites.json
-        vars: 
-          cd_admin_address: "localhost:80"
-          cd_identifiers: ["localhost", "{{ vm_vars.vm_info.hostname }}"]
-          cd_admin_listen: "localhost:5151"
-
-    - name: Generate apps config
-      template: 
-        src: ../data/caddy/site.yml
-        dest: "/home/docker/docker_data/caddy/{{ item.name }}.json"
-      vars:
-        server_name: "{{ item.name }}"
-        listen_address: 5001
-        server_path: "/{{ item.name }}"
-        dial_address: "{{ item.dial }}"
-      with_items: 
-       - {name: "sonarr", dial: "sonarr:8989" }
+        src: ../data/caddy/sites.j2
+        dest: /home/docker/docker_data/caddy/config/caddy/sites.json
+        force: yes
+      vars: 
+        cd_admin_address: ":80"
+        cd_identifiers: ["{{ vm_vars.vminfo.hostname }}"]
+        cd_admin_listen: ":80"
+        listen_address: ":80"
+        listen_port: ":80"
+        apps:
+         - {name: "sonarr", server_paths: ["/sonarr", "/sonarr/*"], "dial": "sonarr:8989" }
+         - {name: "radarr", server_paths: ["/radarr", "/radarr/*"], "dial": "radarr:7878" }
+         - {name: "homer", server_paths: ["/", "/*"], "dial": "homer:8080" }
 
 
     - name: Get homer theme
@@ -394,15 +386,15 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.deluge.rule": "PathPrefix(`/deluge`)"
-          "traefik.http.routers.deluge.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
-          "traefik.http.routers.deluge.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.deluge.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
+          "traefik.http.routers.deluge.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.services.deluge.loadbalancer.server.port": "8112"
           "traefik.http.routers.deluge.middlewares": "deluge-stripprefix@docker"
           "traefik.http.middlewares.deluge-stripprefix.stripprefix.prefixes": "/deluge"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: "Australia/Melbourne"
@@ -444,13 +436,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.jackett.rule": "PathPrefix(`/jackett`)"
-          "traefik.http.routers.jackett.entrypoints": "{{ traefik_default_scheme }}"
-          "traefik.http.routers.jackett.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.routers.jackett.entrypoints": "{{ caddy_default_scheme }}"
+          "traefik.http.routers.jackett.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
           "traefik.http.services.jackett.loadbalancer.server.port": "9117"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: Australia/Melbourne
@@ -477,13 +469,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.lidarr.rule": "PathPrefix(`/lidarr`)"
-          "traefik.http.routers.lidarr.entrypoints": "{{ traefik_default_scheme }}"
-          "traefik.http.routers.lidarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.routers.lidarr.entrypoints": "{{ caddy_default_scheme }}"
+          "traefik.http.routers.lidarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
           "traefik.http.services.lidarr.loadbalancer.server.port": "8686"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
@@ -504,13 +496,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.radarr.rule": "PathPrefix(`/radarr`)"
-          "traefik.http.routers.radarr.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.radarr.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.services.radarr.loadbalancer.server.port": "7878"
-          "traefik.http.routers.radarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.radarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: Australia/Melbourne
@@ -539,13 +531,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.sonarr.rule": "PathPrefix(`/sonarr`)"
-          "traefik.http.routers.sonarr.entrypoints": "{{ traefik_default_scheme }}"
-          "traefik.http.routers.sonarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
+          "traefik.http.routers.sonarr.entrypoints": "{{ caddy_default_scheme }}"
+          "traefik.http.routers.sonarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
           "traefik.http.services.sonarr.loadbalancer.server.port": "8989"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
@@ -571,14 +563,14 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.ombi.rule": "PathPrefix(`/ombi`)"
-          "traefik.http.routers.ombi.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.ombi.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.services.ombi.loadbalancer.server.port": "3579"
-          "traefik.http.routers.ombi.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.protoheader.headers.customrequestheaders.X-Forwarded-Proto": "{{ traefik_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.ombi.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.protoheader.headers.customrequestheaders.X-Forwarded-Proto": "{{ caddy_default_scheme }}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
@@ -603,13 +595,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.bazarr.rule": "PathPrefix(`/bazarr`)"
-          "traefik.http.routers.bazarr.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.bazarr.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.services.bazarr.loadbalancer.server.port": "6767"
-          "traefik.http.routers.bazarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.bazarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
@@ -636,13 +628,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.prowlarr.rule": "PathPrefix(`/prowlarr`)"
-          "traefik.http.routers.prowlarr.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.prowlarr.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.services.prowlarr.loadbalancer.server.port": "9696"
-          "traefik.http.routers.prowlarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.prowlarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
@@ -665,13 +657,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.readarr.rule": "PathPrefix(`/readarr`)"
-          "traefik.http.routers.readarr.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.readarr.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.services.readarr.loadbalancer.server.port": "8787"
-          "traefik.http.routers.readarr.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.readarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         volumes:
         - "/home/docker/docker_data/readarr:/config"
@@ -697,13 +689,13 @@
         labels:
           "traefik.enable": "true"
           "traefik.http.routers.homer.rule": "PathPrefix(`/`)"
-          "traefik.http.routers.homer.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.homer.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.services.homer.loadbalancer.server.port": "8080"
-          "traefik.http.routers.homer.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.homer.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
+          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
           "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
           "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
+          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
           "traefik.http.routers.http_catchall.middlewares": "https_redirect"  
         networks:
          - name: docker
@@ -741,56 +733,24 @@
         purge_networks: yes
 
 
-
-
-    - name: Run traefik
-      docker_container:
-        name: traefik
-        recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_readarr.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
-        labels: 
-          "traefik.enable": "true"
-          "traefik.http.routers.api.rule": "PathPrefix(`/traefik`)"
-          "traefik.http.routers.api.entrypoints": "https,http"
-          "traefik.http.routers.api.service": "dashboard@internal"
-          "traefik.http.routers.traefik.tls": "{{ 'true' if traefik_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ traefik_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ traefik_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
-        image: "traefik:latest"
-        network_mode: host
-        restart_policy: unless-stopped
-        volumes:
-        - "/var/run/docker.sock:/var/run/docker.sock"
-        - "/var/www/ssl/:/ssl"
-        - "/home/docker/docker_data/traefik/traefik.yml:/traefik.yml"
-        - "/home/docker/docker_data/traefik/certs.yml:/certs.yml"
-        - "/home/docker/docker_data/traefik/acme.json:/acme.json"
-        - "/root/webca.crt:/webca.crt"
-        - "/root/webca.pem:/webca.pem"
-        purge_networks: yes
-      tags: 
-      - "traefik"
-
     - name: Run caddy
       docker_container:
         name: caddy
-        published_ports: ["5000:80"]
+        published_ports: ["80:80", "443:443", "2019:2019"]
         recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_readarr.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
         image: "caddy:latest"
-        networks:
-         - name: docker_ext-dmz
-           ipv4_address: "10.0.50.81"
-         - name: docker_comms
         restart_policy: unless-stopped
         volumes:
         - "/var/run/docker.sock:/var/run/docker.sock"
         - "/var/www/ssl/:/ssl"
-        - "/home/docker/docker_data/caddy:/data"
+        - "/home/docker/docker_data/caddy/data:/data"
+        - "/home/docker/docker_data/caddy/config:/config"
         - "/root/webca.crt:/webca.crt"
         - "/root/webca.pem:/webca.pem"
         purge_networks: yes
+        command: caddy run --config /config/caddy/sites.json
+        networks:
+         - name: docker
       tags: 
       - "traefik"
 
@@ -972,7 +932,7 @@
         state: started
         restart: yes
         comparisons: {"*": "ignore"}
-      with_items: ["lidarr", "sonarr", "radarr", "bazarr", "readarr", "jackett", "deluge", "ombi", "prowlarr"]
+      with_items: ["lidarr", "sonarr", "radarr", "bazarr", "readarr", "jackett", "deluge", "ombi", "prowlarr", "caddy"]
       when: url_base_output.changed or api_change_output.changed
     
 
@@ -981,6 +941,7 @@
         src: ../data/homer/homer.j2
         dest: /home/docker/docker_data/homer/config.yml
         mode: '0777'
+        force: yes
 
     - name: Set homer permissions
       file:
@@ -1019,7 +980,7 @@
 
     - name: Wait for return code
       uri:
-        url: "{{ traefik_default_scheme }}://{{ ansible_default_ipv4.address }}:{{ traefik_default_port }}/{{ item }}"
+        url: "{{ caddy_default_scheme }}://{{ ansible_default_ipv4.address }}:{{ caddy_default_port }}/{{ item }}"
         status_code: 200
         validate_certs: false
       register: result
@@ -1034,7 +995,7 @@
 
     - name: Set configurator fact base
       set_fact:
-        cf_string: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p {{ traefik_default_port }} -a {{ vm_vars.api_key }} -s {{ traefik_default_scheme }}"
+        cf_string: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p {{ caddy_default_port }} -a {{ vm_vars.api_key }} -s {{ caddy_default_scheme }}"
 
     - name: Add optional vars
       set_fact: 

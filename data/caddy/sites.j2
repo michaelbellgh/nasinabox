@@ -1,26 +1,4 @@
 {
-	"admin": {
-		"disabled": false,
-		"listen": "{{ cd_admin_address }}",
-		"enforce_origin": false,
-		"origins": [""],
-		"config": {
-			"persist": false
-		},
-		"identity": {
-			"identifiers": {{ cd_identifiers }}
-		},
-		"remote": {
-			"listen": "{{ cd_admin_listen }}",
-			"access_control": [{
-				"public_keys": [""],
-				"permissions": [{
-					"paths": [""],
-					"methods": [""]
-				}]
-			}]
-		}
-	},
 	"logging": {
 		"sink": {
 			"writer": {"output": "stdout"}
@@ -48,11 +26,33 @@
 					"interval": 0,
 					"first": 0,
 					"thereafter": 0
-				},
-				"include": [""],
-				"exclude": [""]
+				}
 			}
 		}
 	},
 	"storage": {"module": "file_system", "root": "/logs/"},
+	"apps": {
+		"http": {
+		"servers": {
+			"rev_proxy": {
+			"listen": [":80", ":443"],
+			"routes": [ {% for app in apps %}
+				{
+				"match": 
+				[{
+					"path": [{% for path in app.server_paths %}"{{ path }}"{% if not loop.last %},{% endif %}{% endfor %}]
+				}],
+				"handle": [
+					{
+					"handler": "reverse_proxy",
+					"upstreams": 
+					[{
+						"dial": "{{ app.dial }}"
+					}]
+					}]
+				}{% if not loop.last %},{% endif %}{% endfor %}]
+			}
+		}
+		}
+	}
 }
