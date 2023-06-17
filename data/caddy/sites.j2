@@ -1,4 +1,5 @@
 {
+	"admin":  {"disabled": false, "listen": ":2019"},
 	"logging": {
 		"sink": {
 			"writer": {"output": "stdout"}
@@ -48,7 +49,9 @@
 					"upstreams": 
 					[{
 						"dial": "{{ app.dial }}"
-					}]
+					}]{% if app.stripprefix is defined %},"rewrite": {
+						"strip_path_prefix": "{{ app.stripprefix }}"
+					}{% endif %}
 					}]
 				}{% if not loop.last %},{% endif %}{% endfor %}]
 			}

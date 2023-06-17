@@ -24,7 +24,6 @@
         state: directory
         mode: '0744'
       with_items:
-       - "/home/docker/docker_data/traefik/"
        - "/home/docker/docker_data/caddy"
        - "/home/docker/docker_data/caddy/data"
        - "/home/docker/docker_data/caddy/config"
@@ -51,6 +50,7 @@
     
     - name: Set system settings (apply)
       command: "sysctl -p"
+      when: set_system_settings.changed
     
 
     - name: Upgrade packages and distro
@@ -190,16 +190,7 @@
         force: yes
       become: yes
       with_items:
-       - { src: "../data/traefik/traefik.yml", dest: "/home/docker/docker_data/traefik/traefik.yml", force: yes}
-       - { src: "../data/traefik/certs.yml", dest: "/home/docker/docker_data/traefik/certs.yml" , force: yes}
        - { src: "../data/homer/icons/", dest: "/home/docker/docker_data/homer/icons/", force: yes}
-
-    - name: Set permissions for ACME
-      file:
-        mode: 0600
-        path: "/home/docker/docker_data/traefik/acme.json"
-        state: touch
-    
 
 
     
@@ -326,15 +317,17 @@
         src: ../data/caddy/sites.j2
         dest: /home/docker/docker_data/caddy/config/caddy/sites.json
         force: yes
-      vars: 
-        cd_admin_address: ":80"
-        cd_identifiers: ["{{ vm_vars.vminfo.hostname }}"]
-        cd_admin_listen: ":80"
-        listen_address: ":80"
-        listen_port: ":80"
+      vars:
         apps:
          - {name: "sonarr", server_paths: ["/sonarr", "/sonarr/*"], "dial": "sonarr:8989" }
          - {name: "radarr", server_paths: ["/radarr", "/radarr/*"], "dial": "radarr:7878" }
+         - {name: "ombi", server_paths: ["/ombi", "/ombi/*"], "dial": "ombi:3579" }
+         - {name: "lidarr", server_paths: ["/lidarr", "/lidarr/*"], "dial": "lidarr:8686" }
+         - {name: "bazarr", server_paths: ["/bazarr", "/bazarr/*"], "dial": "bazarr:6767" }
+         - {name: "jackett", server_paths: ["/jackett", "/jackett/*"], "dial": "jackett:9117" }
+         - {name: "readarr", server_paths: ["/readarr", "/readarr/*"], "dial": "readarr:8787" }
+         - {name: "prowlarr", server_paths: ["/prowlarr", "/prowlarr/*"], "dial": "prowlarr:9696" }
+         - {name: "deluge", server_paths: ["/deluge", "/deluge/*"], "dial": "deluge:8112", stripprefix: "/deluge" }
          - {name: "homer", server_paths: ["/", "/*"], "dial": "homer:8080" }
 
 
@@ -383,19 +376,6 @@
       docker_container:
         name: deluge
         image: linuxserver/deluge:2.1.1-r3-ls179
-        labels:
-          "traefik.enable": "true"
-          "traefik.http.routers.deluge.rule": "PathPrefix(`/deluge`)"
-          "traefik.http.routers.deluge.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
-          "traefik.http.routers.deluge.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.services.deluge.loadbalancer.server.port": "8112"
-          "traefik.http.routers.deluge.middlewares": "deluge-stripprefix@docker"
-          "traefik.http.middlewares.deluge-stripprefix.stripprefix.prefixes": "/deluge"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: "Australia/Melbourne"
          PUID: "1001"
@@ -409,7 +389,6 @@
         - "{{ vm_vars.nas.storage_path }}Downloads/incomplete:/incomplete"
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
-        purge_networks: yes
       register: docker_deluge
 
     - name: Start plex
@@ -433,17 +412,6 @@
       docker_container:
         name: jackett
         image: linuxserver/jackett
-        labels:
-          "traefik.enable": "true"
-          "traefik.http.routers.jackett.rule": "PathPrefix(`/jackett`)"
-          "traefik.http.routers.jackett.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.jackett.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
-          "traefik.http.services.jackett.loadbalancer.server.port": "9117"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: Australia/Melbourne
          AUTO_UPDATE: "true"
@@ -455,7 +423,6 @@
         - /home/docker/docker_data/jackett/config:/config
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
-        purge_networks: yes
       register: docker_jackett
 
     - name: Start lidarr
@@ -466,17 +433,6 @@
          TZ: Australia/Melbourne
          PUID: "1001"
          PGID: "1001"
-        labels:
-          "traefik.enable": "true"
-          "traefik.http.routers.lidarr.rule": "PathPrefix(`/lidarr`)"
-          "traefik.http.routers.lidarr.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.lidarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
-          "traefik.http.services.lidarr.loadbalancer.server.port": "8686"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["jackett", "deluge"]
@@ -486,24 +442,12 @@
         - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
-        purge_networks: yes
       register: docker_lidarr
 
     - name: Start radarr
       docker_container:
         name: radarr
         image: linuxserver/radarr:nightly
-        labels:
-          "traefik.enable": "true"
-          "traefik.http.routers.radarr.rule": "PathPrefix(`/radarr`)"
-          "traefik.http.routers.radarr.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.services.radarr.loadbalancer.server.port": "7878"
-          "traefik.http.routers.radarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         env: 
          TZ: Australia/Melbourne
          PUID: "1001"
@@ -517,7 +461,6 @@
         - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
-        purge_networks: yes
       register: docker_radarr
 
     - name: Start sonarr
@@ -528,17 +471,6 @@
          TZ: Australia/Melbourne
          PUID: "1001"
          PGID: "1001"
-        labels:
-          "traefik.enable": "true"
-          "traefik.http.routers.sonarr.rule": "PathPrefix(`/sonarr`)"
-          "traefik.http.routers.sonarr.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.sonarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
-          "traefik.http.services.sonarr.loadbalancer.server.port": "8989"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["jackett", "deluge"]
@@ -548,7 +480,6 @@
         - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         - /var/www/ssl/:/ssl
         restart_policy: unless-stopped
-        purge_networks: yes
       register: docker_sonarr
 
     - name: Start ombi
@@ -560,18 +491,6 @@
          BASE_URL: "/ombi"
          PUID: "1001"
          PGID: "1001"
-        labels:
-          "traefik.enable": "true"
-          "traefik.http.routers.ombi.rule": "PathPrefix(`/ombi`)"
-          "traefik.http.routers.ombi.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.services.ombi.loadbalancer.server.port": "3579"
-          "traefik.http.routers.ombi.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.protoheader.headers.customrequestheaders.X-Forwarded-Proto": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["sonarr", "radarr", "ombi"]
@@ -579,7 +498,6 @@
         - /home/docker/docker_data/ombi/config:/config
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
-        purge_networks: yes
       register: docker_ombi
 
 
@@ -592,17 +510,6 @@
          PUID: "1001"
          PGID: "1001"
         published_ports: ["6767:6767"]
-        labels:
-          "traefik.enable": "true"
-          "traefik.http.routers.bazarr.rule": "PathPrefix(`/bazarr`)"
-          "traefik.http.routers.bazarr.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.services.bazarr.loadbalancer.server.port": "6767"
-          "traefik.http.routers.bazarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["sonarr", "radarr"]
@@ -612,7 +519,6 @@
         - "{{ vm_vars.nas.storage_path }}TV:/tv"
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
-        purge_networks: yes
       register: docker_bazarr
 
 
@@ -625,17 +531,6 @@
          PUID: "1001"
          PGID: "1001"
         published_ports: ["9696:9696"]
-        labels:
-          "traefik.enable": "true"
-          "traefik.http.routers.prowlarr.rule": "PathPrefix(`/prowlarr`)"
-          "traefik.http.routers.prowlarr.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.services.prowlarr.loadbalancer.server.port": "9696"
-          "traefik.http.routers.prowlarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         networks:
         - name: "docker"
           links: ["sonarr", "radarr"]
@@ -643,7 +538,6 @@
         - /home/docker/docker_data/prowlarr/config:/config
         - "/var/www/ssl/:/ssl"
         restart_policy: unless-stopped
-        purge_networks: yes
       register: docker_prowlarr
 
     - name: Start readarr
@@ -654,17 +548,6 @@
          TZ: Australia/Melbourne
          PUID: "1001"
          PGID: "1001"
-        labels:
-          "traefik.enable": "true"
-          "traefik.http.routers.readarr.rule": "PathPrefix(`/readarr`)"
-          "traefik.http.routers.readarr.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.services.readarr.loadbalancer.server.port": "8787"
-          "traefik.http.routers.readarr.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"
         volumes:
         - "/home/docker/docker_data/readarr:/config"
         - "{{ vm_vars.nas.storage_path }}Books:/books"
@@ -673,7 +556,6 @@
         networks:
         - name: "docker"
           links: ["jackett", "deluge"]
-        purge_networks: yes
       register: docker_readarr
 
     - name: Start Homer
@@ -686,21 +568,9 @@
           TZ: Australia/Melbourne
         volumes:
         - /home/docker/docker_data/homer:/www/assets
-        labels:
-          "traefik.enable": "true"
-          "traefik.http.routers.homer.rule": "PathPrefix(`/`)"
-          "traefik.http.routers.homer.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.services.homer.loadbalancer.server.port": "8080"
-          "traefik.http.routers.homer.tls": "{{ 'true' if caddy_default_scheme == 'https' else 'http'}}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.scheme": "{{ caddy_default_scheme }}"
-          "traefik.http.middlewares.https_redirect.redirectscheme.permanent": "true"
-          "traefik.http.routers.http_catchall.rule": "HostRegexp(`{any:.+}`)"
-          "traefik.http.routers.http_catchall.entrypoints": "{{ caddy_default_scheme }}"
-          "traefik.http.routers.http_catchall.middlewares": "https_redirect"  
         networks:
          - name: docker
         restart_policy: unless-stopped
-        purge_networks: yes
       register: docker_homer
 
 
@@ -730,7 +600,6 @@
          - "-s Files;/files;yes;no;yes;all;none"
         command_handling: correct
         restart_policy: unless-stopped
-        purge_networks: yes
 
 
     - name: Run caddy
@@ -747,12 +616,9 @@
         - "/home/docker/docker_data/caddy/config:/config"
         - "/root/webca.crt:/webca.crt"
         - "/root/webca.pem:/webca.pem"
-        purge_networks: yes
         command: caddy run --config /config/caddy/sites.json
         networks:
          - name: docker
-      tags: 
-      - "traefik"
 
     - name: Set permissions (mode)
       file:
@@ -963,17 +829,6 @@
        - { path: "/home/docker/docker_data/homer", owner: media, group: media, mode: '0777'}
       register: final_permissions_dir
 
-    - name: Set permissions (files)
-      file:
-        path: "{{ item.path }}"
-        owner: "{{ item.owner }}"
-        group: "{{ item.group }}"
-        mode: "{{ item.mode }}"
-      become: yes
-      with_items:
-       - { path: "/home/docker/docker_data/traefik/acme.json", owner: media, group: media, mode: '0600' }
-      register: final_permissions_files
-
 
     - name: Start docker containers
       shell: "docker start $(docker ps -a -q)"
@@ -991,6 +846,10 @@
        - "sonarr"
        - "lidarr"
        - "radarr"
+       - "readarr"
+       - "prowlarr"
+       - "bazarr"
+       - "jackett"
 
 
     - name: Set configurator fact base
