@@ -1,11 +1,24 @@
 import threading
-import requests, json, argparse, os, datetime
-
-
+import requests, json, argparse, os, json
 import urllib3
+
+from urllib.parse import quote
 
 urllib3.disable_warnings()
 
+customisation_params = {
+    "ombi_title": "Ombi - nasinabox",
+    "url_mode": "path",
+    "instance_name": "nasinabox",
+    "sonarr_path": "/sonarr",
+    "lidarr_path": "/lidarr",
+    "radarr_path": "/radarr",
+    "torrent_path": "/",
+    "ombi_path": "/ombi",
+    "validate_ssl": False,
+    "preferr_dv": False
+
+}
 
 def api_request_darr(hostname: str, port: int, path: str, api_key: str, json: dict, scheme: str="https", method: str="POST", verify_certificate=False):
     uri = scheme + "://" + hostname + ":" + str(port) + path + "?apikey=" + api_key
@@ -171,12 +184,6 @@ def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, 
 
     response = None
 
-    #Something gets set on the backend when the landing page gets loaded - needed for next steps
-    #for url in ["/api/v1/Settings/customization", "/translations/en.json?v=92360805", "/api/v1/Settings/voteenabled", "/api/v1/Settings/issuesenabled", "/api/v1/Settings/LandingPage",
-    #         "/api/v1/status/Wizard/", "/api/v1/Settings/Authentication", "/v1/Settings/clientid", "/api/v1/Settings/clientid"]:
-    #    response = requests.get(uri + url, verify=validate_certificates, headers={"content-type" : "application/json"})
-    #Now not needed - just need to finish via the Wizard endpoint below
-
 
     
     
@@ -203,12 +210,10 @@ def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, 
 
 
 
-
-
 ### *darr Methods
 
 class darr_instance:
-    def __init__(self, name, hostname: str, port: int, path: str, ssl: bool, v3: bool, api_key: str, scheme: str):
+    def __init__(self, name, hostname: str, port: int, path: str, ssl: bool, v3: bool, api_key: str, scheme: str, internal_port: int, ssl_port: int):
         self.name = name
         self.hostname = hostname
         self.port = port
@@ -217,6 +222,8 @@ class darr_instance:
         self.ssl = ssl
         self.v3 = v3
         self.api_key = api_key
+        self.ssl_port = ssl_port
+        self.internal_port = internal_port
 
 def darr_add_root_folder(darr : darr_instance, name, path, api_version="v3", additional_fields={}):
     fields = {"path" : path, "name": name}
@@ -247,6 +254,14 @@ def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: s
     api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/downloadclient", darr.api_key, body, darr.scheme, "POST")
 
 
+def darr_get_tag_dict(darr: darr_instance, validate_cert: bool):
+    tags = requests.get(darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/v3/tag?apikey=" + darr.api_key, verify=validate_cert).json()
+    d = {}
+    for item in tags:
+        d[item["label"]] = item["id"]
+
+    return d
+
 
 def bazarr_configure_english_providers(darr: darr_instance, open_subtitles_username: str=None, open_subtitles_password: str=None, validate_certs=False):
     providers = ["betaseries", "opensubtitlescom", "subscenter", "supersubtitles", "tvsubtitles", "yifysubtitles"]
@@ -263,9 +278,68 @@ def bazarr_configure_english_providers(darr: darr_instance, open_subtitles_usern
     response = requests.post(darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/system/settings?apikey=" + darr.api_key, data=body, verify=validate_certs)
     return response.status_code == 204
 
+def darr_add_release_profile(darr: darr_instance, name: str, required: list, ignore: list, preferred: list, tag_ids: list, validate_cert: bool):
+
+    profiles = requests.get(darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/v3/releaseprofile?apikey=" + darr.api_key, verify=validate_cert).json()
+    names = [x["name"] for x in profiles]
+
+    tags = darr_get_tag_dict(darr, validate_cert)
+
+
+
+    if name in names:
+        print(f"{name} already in release profiles. Skipping")
+        return None
+
+
+    body = {}
+    body["name"] = name
+    body["enabled"] = True
+    body["includePreferredWhenRenaming"] = False
+    body["indexerId"] = 0
+    
+    body["required"] = []
+    if required is not None and isinstance(required, list) and len(required) > 0:
+        for term in required:
+            if isinstance(term, str):
+                body["required"].append(term)
+
+    body["ignored"] = []
+    if ignore is not None and isinstance(ignore, list) and len(ignore) > 0:
+        
+        for term in ignore:
+            if isinstance(term, str):
+                body["ignored"].append(term)
+
+    body["preferred"] = []
+    if preferred is not None and isinstance(preferred, list) and len(preferred) > 0: 
+        for term in preferred:
+            if isinstance(term, dict) and all(k in term for k in ("key", "value")):
+                body["preferred"].append(term)
+
+    body["tags"] = []
+    if tag_ids is not None and isinstance(tag_ids, list) and len(tag_ids) > 0:
+        for term in tag_ids:
+            if isinstance(term, str) and term in tags:
+                body["tags"].append(tags[term])
+    
+
+
+    response = requests.post(darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/v3/releaseprofile?apikey=" + darr.api_key, json=body, verify=validate_cert)
+    return response.status_code == 200
+
+
+
+def darr_add_tag(darr: darr_instance, name: str, validate_cert=False):
+    tags = darr_get_tag_dict(darr, validate_cert=False)
+    if not name in tags:
+        response = requests.post(darr.scheme + "://" + darr.hostname + ":" + str(darr.port) + darr.path + "/api/v3/tag?apikey=" + darr.api_key, verify=validate_cert, json={"label": name})
+        return response.status_code == 201
+    return False
+
 def bazarr_configure_sonarr_provider(darr: darr_instance, sonarr_instance: darr_instance, validate_certs=False):
     body = { \
-        "settings-general-use_sonarr" : (None, True),
+        "settings-general-use_sonarr" : (None, "true"),
         "settings-sonarr-ip" : (None, "sonarr"),
         "settings-sonarr-base_url" : (None, sonarr_instance.path),
         "settings-sonarr-apikey" : (None, sonarr_instance.api_key)
@@ -280,7 +354,7 @@ def bazarr_configure_sonarr_provider(darr: darr_instance, sonarr_instance: darr_
 
 def bazarr_configure_radarr_provider(darr: darr_instance, radarr_instance: darr_instance, validate_certs=False):
     body = { \
-        "settings-general-use_radarr" : (None, True),
+        "settings-general-use_radarr" : (None, "true"),
         "settings-radarr-ip" : (None, "radarr"),
         "settings-radarr-base_url" : (None, radarr_instance.path),
         "settings-radarr-apikey" : (None, radarr_instance.api_key)
@@ -294,30 +368,15 @@ def bazarr_configure_radarr_provider(darr: darr_instance, radarr_instance: darr_
     return response.status_code == 200
 
 def bazarr_configure_lang_profile(darr: darr_instance, language="en", validate_certs=False) -> bool:
-    language_profiles = json.dumps([{ \
-        "profileId": 1,
-        "name": language,
-        "items": [ \
-            {
-                "id": 1,
-                "language": language,
-                "audio_exclude": False,
-                "hi": False,
-                "forced": False
-            }
-        ],
-        "cutoff": 65535,
-        "mustContain": [],
-        "mustNotContain": []
-    }])
+    static_lang_profile = '[{"profileId":1,"name":"' + language +'","items":[{"id":1,"language":"' + language + '","audio_exclude":"False","hi":"False","forced":"False"}],"cutoff":null,"mustContain":[],"mustNotContain":[],"originalFormat":false}]'
 
     body = { \
-        "settings-general-serie_default_enabled" : (None,True),
-        "settings-general-movie_default_enabled" : (None,True),
-        "settings-general-serie_default_profile" : (None,1),
-        "settings-general-movie_default_profile" :(None,1),
+        "settings-general-serie_default_enabled" : (None, "true"),
+        "settings-general-movie_default_enabled" : (None,"true"),
+        "settings-general-serie_default_profile" : (None,"1"),
+        "settings-general-movie_default_profile" :(None, "1"),
         "languages-enabled" : (None,language),
-        "languages-profiles" : (None, language_profiles)
+        "languages-profiles" : (None, static_lang_profile)
     }
 
     headers = {"x-api-key": darr.api_key}
@@ -353,7 +412,7 @@ def prowlarr_get_all_public_indexers(prowlarr: darr_instance, validate_certs: bo
     return public_indexers_json
 
 
-def prowlarr_add_indexers(prowlarr: darr_instance, validate_certs: bool, api_key: str, indexers: list) -> bool:
+def prowlarr_add_indexers(prowlarr: darr_instance, validate_certs: bool, api_key: str, indexers: list, flaresolverr_tag: int=0) -> bool:
     some_success = False
     if not os.path.exists("blacklist.txt"):
         file = open("blacklist.txt", "w")
@@ -370,6 +429,9 @@ def prowlarr_add_indexers(prowlarr: darr_instance, validate_certs: bool, api_key
             continue
         url = prowlarr.scheme + "://" + prowlarr.hostname + ":" + str(prowlarr.port) + prowlarr.path + "/api/v1/indexer?"
         json_body = indexer
+        if flaresolverr_tag != 0:
+            json_body["tags"] = [flaresolverr_tag]
+        json_body["appProfileId"] = 1
         response = requests.post(url, headers={"x-api-key": api_key}, json=json_body, verify=validate_certs)
         response_json = response.json()
         if response.status_code == 400:
@@ -405,7 +467,7 @@ def prowlarr_add_radarr(prowlarr_instance: darr_instance, radarr_instance: darr_
             },
             {
                 "name": "baseUrl",
-                "value": radarr_instance.scheme + "://" + radarr_instance.hostname + ":" + str(radarr_instance.port)
+                "value": radarr_instance.scheme + "://" + radarr_instance.name + ":7878" + radarr_instance.path
             },
             {
                 "name": "apiKey",
@@ -420,14 +482,14 @@ def prowlarr_add_radarr(prowlarr_instance: darr_instance, radarr_instance: darr_
 
     response = requests.post(url, headers={"x-api-key": prowlarr_instance.api_key}, verify=validate_ssl, json=body)
     if response.status_code == 201:
-        print("Added Radarr to Prowlarr")
+        print("Added Sonarr to Prowlarr")
         return True
     elif response.status_code == 400:
         json_response = response.json()
         if json_response[0]["errorMessage"] == "Should be unique":
             return True
         else:
-            print("Couldnt add Radarr instance to Prowlarr")
+            print("Couldnt add Sonarr instance to Prowlarr")
     
     return False
 
@@ -448,7 +510,7 @@ def prowlarr_add_sonarr(prowlarr_instance: darr_instance, sonarr_instance: darr_
             },
             {
                 "name": "baseUrl",
-                "value": sonarr_instance.scheme + "://" + sonarr_instance.hostname + ":" + str(sonarr_instance.port)
+                "value": sonarr_instance.scheme + "://" + sonarr_instance.name + ":8989" + sonarr_instance.path
             },
             {
                 "name": "apiKey",
@@ -478,13 +540,102 @@ def prowlarr_add_sonarr(prowlarr_instance: darr_instance, sonarr_instance: darr_
     
     return False
 
-def prowlarr_set_authentication(prowlarr_instance: darr_instance, username: str, password: str, authentication_method: str="forms", validate_ssl: bool=False) -> bool:
-    url = prowlarr_instance.scheme + "://" + prowlarr_instance.hostname + ":" + str(prowlarr_instance.port) + prowlarr_instance.path + "/api/v1/config/host"
+def prowlarr_add_readarr(prowlarr_instance: darr_instance, readarr_instance: darr_instance, internal_prowlarr_instance: darr_instance, validate_ssl: bool=False) -> bool:
+    url = prowlarr_instance.scheme + "://" + prowlarr_instance.hostname + ":" + str(prowlarr_instance.port) + prowlarr_instance.path + "/api/v1/applications?"
+    body = {
+        "configContract": "ReadarrSettings",
+        "implementation": "Readarr",
+        "implementationName": "Readarr",
+        "infoLink": "https://wiki.servarr.com/prowlarr/supported#radarr",
+        "name": "Readarr",
+        "syncLevel": "fullSync",
+        "tags": [],
+        "fields": [
+            {
+                "name": "prowlarrUrl",
+                "value": internal_prowlarr_instance.scheme + "://" + internal_prowlarr_instance.hostname + ":" + str(internal_prowlarr_instance.port)
+            },
+            {
+                "name": "baseUrl",
+                "value": readarr_instance.scheme + "://" + readarr_instance.name + ":8787" + readarr_instance.path
+            },
+            {
+                "name": "apiKey",
+                "value": readarr_instance.api_key
+            },
+            {
+                "name": "syncCategories",
+                "value": [3030, 7000, 7010, 7020, 7030, 7040, 7050, 7060]
+            }
+        ]
+    }
+
+    response = requests.post(url, headers={"x-api-key": prowlarr_instance.api_key}, verify=validate_ssl, json=body)
+    if response.status_code in (200, 201, 202):
+        print("Added Radarr to Prowlarr")
+        return True
+    elif response.status_code == 400:
+        json_response = response.json()
+        if json_response[0]["errorMessage"] == "Should be unique":
+            return True
+        else:
+            print("Couldnt add Readarr instance to Prowlarr")
+    
+    return False
+
+def prowlarr_add_lidarr(prowlarr_instance: darr_instance, lidarr_instance: darr_instance, internal_prowlarr_instance: darr_instance, validate_ssl: bool=False) -> bool:
+    url = prowlarr_instance.scheme + "://" + prowlarr_instance.hostname + ":" + str(prowlarr_instance.port) + prowlarr_instance.path + "/api/v1/applications?"
+    body = {
+        "configContract": "LidarrSettings",
+        "implementation": "Lidarr",
+        "implementationName": "Lidarr",
+        "infoLink": "https://wiki.servarr.com/prowlarr/supported#radarr",
+        "name": "Lidarr",
+        "syncLevel": "fullSync",
+        "tags": [],
+        "fields": [
+            {
+                "name": "prowlarrUrl",
+                "value": internal_prowlarr_instance.scheme + "://" + internal_prowlarr_instance.hostname + ":" + str(internal_prowlarr_instance.port)
+            },
+            {
+                "name": "baseUrl",
+                "value": lidarr_instance.scheme + "://" + lidarr_instance.name + ":8686" + lidarr_instance.path
+            },
+            {
+                "name": "apiKey",
+                "value": lidarr_instance.api_key
+            },
+            {
+                "name": "syncCategories",
+                "value": [3000, 3010, 3030, 3040, 3050, 3060]
+            }
+        ]
+    }
+
+    response = requests.post(url, headers={"x-api-key": prowlarr_instance.api_key}, verify=validate_ssl, json=body)
+    if response.status_code in (200, 201, 202):
+        print("Added Lidarr to Prowlarr")
+        return True
+    elif response.status_code == 400:
+        json_response = response.json()
+        if json_response[0]["errorMessage"] == "Should be unique":
+            return True
+        else:
+            print("Couldnt add Lidarr instance to Prowlarr")
+    
+    return False
+
+def darr_set_authentication(prowlarr_instance: darr_instance, instance_name: str, username: str, password: str, authentication_method: str="forms", api_version="v1", validate_ssl: bool=False) -> bool:
+    url = prowlarr_instance.scheme + "://" + prowlarr_instance.hostname + ":" + str(prowlarr_instance.port) + prowlarr_instance.path + "/api/" + api_version + "/config/host"
+
+    if prowlarr_instance.name == "sonarr":
+        return
 
     body = {
     "bindAddress": "*",
-    "port": 9696,
-    "sslPort": 6969,
+    "port": prowlarr_instance.internal_port,
+    "sslPort": prowlarr_instance.ssl_port,
     "enableSsl": False,
     "launchBrowser": True,
     "authenticationMethod": "forms",
@@ -492,14 +643,15 @@ def prowlarr_set_authentication(prowlarr_instance: darr_instance, username: str,
     "analyticsEnabled": True,
     "username": "nasinabox",
     "password": "nasinabox",
+    "passwordConfirmation": "nasinabox",
     "logLevel": "info",
     "consoleLogLevel": "",
     "branch": "develop",
     "apiKey": prowlarr_instance.api_key,
     "sslCertPath": "",
     "sslCertPassword": "",
-    "urlBase": "/prowlarr",
-    "instanceName": "Prowlarr",
+    "urlBase": prowlarr_instance.path if customisation_params["url_mode"] == "path" else "/",
+    "instanceName": instance_name,
     "updateAutomatically": False,
     "updateMechanism": "docker",
     "updateScriptPath": "",
@@ -523,7 +675,7 @@ def prowlarr_set_authentication(prowlarr_instance: darr_instance, username: str,
     if response.status_code == 202 or response.status_code == 200:	
         return True	
     else:	
-        raise Exception("Unknown issue setting authentication method for Prowlarr\n" + response.json()[0]["errorMessage"])
+        raise Exception("Unknown issue setting authentication method for " + prowlarr_instance.name + "\n" + response.json()[0]["errorMessage"])
 
 
 
@@ -599,32 +751,151 @@ def darr_add_all_configured_jacket_indexers(darr: darr_instance, jackett_api_key
 
 
 
+def prowlarr_add_flaresolverr(prowlarr_instance: darr_instance, validate_ssl: bool=False, flaresolverr_hostname: str="flaresolverr", flaresolverr_port: int=8191) -> bool:
+    url = prowlarr_instance.scheme + "://" + prowlarr_instance.hostname + ":" + str(prowlarr_instance.port) + prowlarr_instance.path + "/api/v1/indexerProxy/?"
+
+    indexers = requests.get(url, verify=validate_ssl, headers={"x-api-key": prowlarr_instance.api_key})
+    names = [x["name"] for x in indexers.json()]
+
+
+    use_put = 'FlareSolverr' in names
+
+    json_data = {
+        "configContract": "FlareSolverrSettings",
+        "fields": [
+            {"name": "host", "value": "http://" + flaresolverr_hostname + ":" + str(flaresolverr_port)},
+            {"name": "requestTimeout", "value": 60}
+        ],
+        "implementation": "FlareSolverr",
+        "implementationName": "FlareSolverr",
+        "includeHealthWarnings": False,
+        "infoLink": "https://wiki.servarr.com/prowlarr/supported#flaresolverr",
+        "name": "FlareSolverr",
+        "onHealthIssue": False,
+        "supportsOnHealthIssue": False,
+        "tags": [
+            1
+        ]
+        
+    }
+    if use_put:
+        json_data["id"] = [x["id"] for x in indexers.json() if x["name"] == "FlareSolverr"][0]
+
+    response = None
+
+    if use_put:
+        response = requests.put(url, verify=validate_ssl, json=json_data, headers={"x-api-key": prowlarr_instance.api_key})
+    else:
+        response = requests.post(url, verify=validate_ssl, json=json_data, headers={"x-api-key": prowlarr_instance.api_key})
+    if response.status_code in (200,201,202):
+        return True
+    else:
+        raise Exception("Unknown issue adding FlareSolverr\n" + response.text)
+
 
 
         
+def add_sonarr_show(sonarr_instance: darr_instance, tvdb_id: int, monitor: str="all", search_for_missing_episodes: bool=True, quality_profile_id: int=1, language_profile_id: int=1, root_folder: str="/tv") -> bool:
+    url = sonarr_instance.scheme + "://" + sonarr_instance.hostname + ":" + str(sonarr_instance.port) + sonarr_instance.path + "/api/v3/series/lookup?term=" + quote("tvdb:" + str(tvdb_id))
+
+    response = requests.get(url, verify=sonarr_instance.ssl, headers={"x-api-key": sonarr_instance.api_key})
+    if response.status_code == 200:
+        payload = response.json()
+        if len(payload) != 1:
+            return False
+        
+        payload = payload[0]
+
+        add_url = sonarr_instance.scheme + "://" + sonarr_instance.hostname + ":" + str(sonarr_instance.port) + sonarr_instance.path + "/api/v3/series"
+
+        additional_fields = {
+            "addOptions": {
+                "ignoreEpisodeWithFiles": False,
+                "ignoreEpisodeWithtoutFiles": False,
+                "monitor": monitor,
+                "searchForCutoffUnmetEpisodes": False,
+                "searchForMissingEpisodes": search_for_missing_episodes
+            },
+            "rootFolderPath": root_folder,
+            "qualityProfileId": quality_profile_id,
+            "languageProfileId": language_profile_id
+        }
+
+        payload.update(additional_fields)
+
+        response = requests.post(add_url, verify=sonarr_instance.ssl, json=payload, headers={"x-api-key": sonarr_instance.api_key})
+        return response.status_code in (200, 201)
+
+
+def add_radarr_movie(radarr_instance: darr_instance, tvdb_id: int, monitor: str="movieOnly", search_for_missing_movie: bool=True, quality_profile_id: int=1, root_folder: str="/movies") -> bool:
+    url = radarr_instance.scheme + "://" + radarr_instance.hostname + ":" + str(radarr_instance.port) + radarr_instance.path + "/api/v3/movie/lookup?term=" + quote("tmdb:" + str(tvdb_id))
+
+    response = requests.get(url, verify=radarr_instance.ssl, headers={"x-api-key": radarr_instance.api_key})
+    if response.status_code == 200:
+        payload = response.json()
+        if len(payload) != 1:
+            return False
+        
+        payload = payload[0]
+
+        add_url = radarr_instance.scheme + "://" + radarr_instance.hostname + ":" + str(radarr_instance.port) + radarr_instance.path + "/api/v3/movie"
+
+        additional_fields = {
+            "addOptions": {         
+                "monitor": monitor,
+                "searchForMovie": search_for_missing_movie,
+                "ignoreEpisodesWithFiles": False,
+                "ignoreEpsidesWithoutFiles": False
+            },
+            "monitored": True,
+            "rootFolderPath": root_folder,
+            "qualityProfileId": quality_profile_id,
+        }
+
+        payload.update(additional_fields)
+
+        response = requests.post(add_url, verify=radarr_instance.ssl, json=payload, headers={"x-api-key": radarr_instance.api_key})
+        return response.status_code in (200, 201)
+
+
+
+
+
 
 
 #torznab_url = jackett_scheme + "://" + jackett_hostname + ":" + str(jackett_port) + "/jackett/api/v2.0/indexers/{id}/results/torznab".format(id)
 
 def configure_all_apps(vars):
 
+    traefik_port = ("443" if vars["default_scheme"] == "https" else "80")
+    sonarr, lidarr, radarr, bazarr, readarr, prowlarr_instance, prowlarr_internal_instance, radarr_internal_instance, sonarr_internal_instance = [None] * 9
 
-    traefik_port = ("443" if vars["traefik_default_scheme"] == "https" else "80")
+    
+    if customisation_params["url_mode"] == "path":
+        sonarr = darr_instance("sonarr", vars['hostname'], vars['port'], "/sonarr", True, True, vars['apikey'], vars['default_scheme'], 8989, 9898)
+        lidarr = darr_instance("lidarr", vars['hostname'], vars['port'], "/lidarr", True, True, vars['apikey'], vars['default_scheme'], 8686, 6969)
+        radarr = darr_instance("radarr", vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], vars['default_scheme'], 7878, 6969)
+        bazarr = darr_instance("bazarr", vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], vars['default_scheme'], 8989, 6969)
+        readarr = darr_instance("readarr", vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], vars['default_scheme'], 8787, 6969)
+        prowlarr_instance = darr_instance("prowlarr", vars['hostname'], vars['port'], "/prowlarr", True, True, vars['apikey'], vars['default_scheme'], 9696, 6969)
+        prowlarr_internal_instance = darr_instance("prowlarr_internal", "prowlarr", 9696, "/prowlarr", False, False, vars['apikey'], vars['default_scheme'], 9696, 6969)
+    elif customisation_params["url_mode"] == "domain":
+        sonarr = darr_instance("sonarr", "sonarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], vars['default_scheme'], 8989, 9898)
+        lidarr = darr_instance("lidarr", "lidarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], vars['default_scheme'], 8686, 6969)
+        radarr = darr_instance("radarr", "radarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], vars['default_scheme'], 7878, 6969)
+        bazarr = darr_instance("bazarr", "bazarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], vars['default_scheme'], 8989, 6969)
+        readarr = darr_instance("readarr", "readarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], vars['default_scheme'], 8787, 6969)
+        prowlarr_instance = darr_instance("prowlarr", "prowlarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], vars['default_scheme'], 9696, 6969)
+        prowlarr_internal_instance = darr_instance("prowlarr_internal", "prowlarr", 9696, "", False, False, vars['apikey'], vars['default_scheme'], 9696, 6969)
 
-    sonarr = darr_instance("sonarr", vars['hostname'], vars['port'], "/sonarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
-    lidarr = darr_instance("lidarr", vars['hostname'], vars['port'], "/lidarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
-    radarr = darr_instance("radarr", vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
-    bazarr = darr_instance("bazarr", vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
-    readarr = darr_instance("readarr", vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
-    prowlarr_instance = darr_instance("prowlarr", vars['hostname'], vars['port'], "/prowlarr", True, True, vars['apikey'], vars['traefik_default_scheme'])
-    prowlarr_internal_instance = darr_instance("prowlarr_internal", "prowlarr", 9696, "/prowlarr", False, False, vars['apikey'], vars['traefik_default_scheme'])
 
 
     
-    darr_add_download_client(sonarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
-    darr_add_download_client(lidarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge", api_version="v1")
-    darr_add_download_client(radarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge")
-    darr_add_download_client(readarr, "Deluge", "deluge", 8112, "/", None ,"deluge", implementation="Deluge", api_version="v1")
+    darr_add_download_client(sonarr, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge")
+    darr_add_download_client(lidarr, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge", api_version="v1")
+    darr_add_download_client(radarr, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge")
+    darr_add_download_client(readarr, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge", api_version="v1")
+    darr_add_download_client(prowlarr_instance, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge", api_version="v1")
 
     darr_add_root_folder(sonarr, "/tv/", "/tv/")
     darr_add_root_folder(lidarr, "/music/", "/music/", api_version="v1", additional_fields={"defaultMetadataProfileId": "1", "defaultQualityProfileId": "1", "defaultTags": []})
@@ -636,23 +907,59 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
-    ombi = ombi_instance(vars["hostname"], traefik_port, "/ombi", vars["apikey"], scheme=vars['traefik_default_scheme'])
+    ombi = ombi_instance(vars["hostname"], traefik_port, customisation_params["ombi_path"], vars["apikey"], scheme=vars['default_scheme'])
     if "plex_username" in vars and "plex_password" in vars:
-        ombi_initial_setup(hostname=vars["hostname"], port=traefik_port, path="/ombi", plex_username=vars["plex_username"], plex_password=vars["plex_password"],  api_key=vars["apikey"], scheme=vars["traefik_default_scheme"], validate_certificates=False,  local_username=vars["app_username"], local_password=vars["app_password"]) 
-    ombi_upload_sonarr_profiles(ombi, "sonarr", 8989, True, vars["apikey"], False, "/sonarr", 4, 1, 1, 1)
-    ombi_upload_radarr_profiles(ombi, "radarr", "7878", vars["apikey"], False, "/radarr", 4, "/movies")
-    ombi_upload_lidarr_profiles(ombi, "lidarr", "8686", vars["apikey"], False, "/lidarr", "/music/")
+        ombi_initial_setup(vars["hostname"], traefik_port, customisation_params["ombi_path"], plex_username=vars["plex_username"], plex_password=vars["plex_password"],  api_key=vars["apikey"], scheme=vars["default_scheme"], validate_certificates=False,  local_username=vars["app_username"], local_password=vars["app_password"]) 
+    ombi_upload_sonarr_profiles(ombi, "sonarr", 8989, True, vars["apikey"], False, customisation_params["sonarr_path"], 4, 1, 1, 1)
+    ombi_upload_radarr_profiles(ombi, "radarr", 7878, vars["apikey"], False, customisation_params["radarr_path"], 4, "/movies")
+    ombi_upload_lidarr_profiles(ombi, "lidarr", 8686, vars["apikey"], False, customisation_params["lidarr_path"], "/music/")
 
-    darr_add_all_configured_jacket_indexers(sonarr, vars["apikey"], vars['traefik_default_scheme'], vars["hostname"], traefik_port, "/jackett", "http", "jackett", 9117, "",categories=[5030, 5040, 5000, 5010, 5020, 5045, 5050, 5060, 5070, 5080])
-    darr_add_all_configured_jacket_indexers(radarr, vars["apikey"], vars['traefik_default_scheme'], vars["hostname"], traefik_port, "/jackett", "http", "jackett", 9117, "", categories=[2000,2010,2020, 2030, 2040,2050,2060, 2070, 2080])
-    darr_add_all_configured_jacket_indexers(readarr, vars["apikey"], vars['traefik_default_scheme'], vars["hostname"], traefik_port, "/jackett", "http", "jackett", 9117, "", categories=[3030, 7020, 8010], api_version="v1")
-    darr_add_all_configured_jacket_indexers(lidarr, vars["apikey"], vars['traefik_default_scheme'], vars["hostname"], traefik_port, "/jackett", "http", "jackett", 9117, "",categories=[3000,3010,3020,3030,3040], api_version="v1")
+    prowlarr_add_flaresolverr(prowlarr_instance, validate_ssl=customisation_params["validate_ssl"], flaresolverr_hostname="flaresolverr", flaresolverr_port=8191)
+
+    darr_add_tag(sonarr, "nohdr", validate_cert=False)
+
+    darr_add_release_profile(sonarr, "Ignore HDR", None, ["\\batmost\\b/i", "/HDR ^|\b(HDR(10\+?)?|dv|dovi|atmos|dolby[-_. ]?vision|HLG)\b/i"], None, ["nohdr"], False)
+    darr_add_release_profile(sonarr, "Optionals", None, ["/^(?=.*(1080|720))(?=.*((x|h)[ ._-]?265|hevc)).*/i"], None, None, False)
+
+    if os.path.exists("preferred.json"):
+        with open("preferred.json", "r") as preferred_file:
+            preferred_json = json.load(preferred_file)
+            sonarr_preferred_streaming = preferred_json["sonarr_preferred_streaming"]
+            sonarr_preferred_p2p = preferred_json["sonarr_preferred_p2p"]
+            sonarr_preferred_lowquality = preferred_json["sonarr_preferred_lowquality"]
+            darr_add_release_profile(sonarr, "Streaming Services", None, None, sonarr_preferred_streaming, None, False)
+            darr_add_release_profile(sonarr, "P2P-Repack-Proper", None, None, sonarr_preferred_p2p, None, False)
+            darr_add_release_profile(sonarr, "Low Quality", None, None, sonarr_preferred_lowquality, None, False)
+            if customisation_params["preferr_dv"]:
+                darr_add_release_profile(sonarr, "Prefer DV then HDR", None, None, preferred_json["prefer_dv"])
+
+    if os.path.exists("preload.json"):
+        with open("preload.json", "r") as preload_file:
+            preload_json = json.load(preload_file)
+            if "shows" in preload_json:
+                show_dicts = preload_json["shows"]
+                for item in show_dicts:
+                    add_sonarr_show(sonarr, item["tvdb_id"], 
+                                    item["monitor"] if "monitor" in item else "all",
+                                    quality_profile_id=item["quality_id"] if "quality_id" in item else 1)
+            if "movies" in preload_json:
+                movie_dicts = preload_json["movies"]
+                for item in movie_dicts:
+                    add_radarr_movie(radarr, item["tmdb_id"],
+                                    item["monitor"] if "monitor" in item else "movieOnly",
+                                    quality_profile_id=item["quality_id"] if "quality_id" in item else 1)
+
 
     indexers = prowlarr_get_all_public_indexers(prowlarr_instance, False, prowlarr_instance.api_key)
     prowlarr_add_indexers(prowlarr_instance, False, prowlarr_instance.api_key, indexers)
     prowlarr_add_radarr(prowlarr_instance, radarr, prowlarr_internal_instance)
     prowlarr_add_sonarr(prowlarr_instance, sonarr, prowlarr_internal_instance)
-    prowlarr_set_authentication(prowlarr_instance, "nasinabox", "nasinabox")
+    prowlarr_add_readarr(prowlarr_instance, readarr, prowlarr_internal_instance)
+    prowlarr_add_lidarr(prowlarr_instance, lidarr, prowlarr_internal_instance)
+    darr_set_authentication(prowlarr_instance, "Prowlarr", customisation_params["instance_name"], customisation_params["instance_name"])
+    darr_set_authentication(sonarr, "Sonarr", customisation_params["instance_name"], customisation_params["instance_name"], "none", api_version="v1")
+    darr_set_authentication(lidarr, "Lidarr", customisation_params["instance_name"], customisation_params["instance_name"], "none", api_version="v1")
+    darr_set_authentication(radarr, "Radarr", customisation_params["instance_name"], customisation_params["instance_name"], "none", api_version="v3")
    
 
     
@@ -666,7 +973,7 @@ def main():
     parser.add_argument("-i", "--hostname", required=True, help="IP Address/Hostname of the *arr clients")
     parser.add_argument("-p", "--port", required=True, help="Port of the *arr clients")
     parser.add_argument("-a", "--apikey", required=True, help="IP Address of the *arr clients")
-    parser.add_argument("-s", "--traefik-default-scheme", required=False, choices=["http", "https"], default="http", help="Default Traefik scheme")
+    parser.add_argument("-s", "--default-scheme", required=False, choices=["http", "https"], default="http", help="Default scheme")
     parser.add_argument("--open-subtitles-username", help="OpenSubtitles.org.com username")
     parser.add_argument("--open-subtitles-password", help="OpenSubtitles.org.com password")
     parser.add_argument("--plex-username", help="Plex username")

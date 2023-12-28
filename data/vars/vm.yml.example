@@ -15,12 +15,25 @@ local_password: "myapppassword"
 plex_username: null
 plex_password: null
 
+
+
 #homer_theme: default
 # Can be default or sui
+
+#static_ip: "192.168.1.50/24"
+#static_gw: "192.168.1.1"
+
+#If the above vars are set, a static netplan setup is applied to the first interface
+
+#optional_dns: ["1.1.1.1", "8.8.8.8"]
+# If set, the static netplan is set to use custom DNS servers. If not set, but static IP is, the GW is the DNS server
+
 
 tailscale_auth_key: null
 #Optional support for joining device to tailscale network
 
+#tvdb_ids: [355567]
+#Can automatically add TV shows based on TheTvDB ID's. Will default to all seasons (minus specials) and use default quality profile
 
 api_key: "4nnuqufdm909hthay5rnu0fq8mbix36j"
 

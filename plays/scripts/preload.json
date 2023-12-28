@@ -1,0 +1,16 @@
+{
+    "shows": [
+    {
+     "tvdb_id": 355567,
+     "monitored": "all",
+     "quality_id": 1
+    }
+    ],
+    "movies": [
+        {
+            "tmdb_id": 872585,
+            "monitored": "movieOnly",
+            "quality_id": 1
+        }
+    ]
+}
