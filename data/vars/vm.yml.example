@@ -44,8 +44,8 @@ zfs_drives: []
 #If you want to make the storage drive a ZFS pool, specify a list of drives e.g.
 #zfs_drives: ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"]
 
-#Type of ZFS raid if used. Raidz1 is the default (like RAID5, allows 1 disk to fail)
+#Type of ZFS raid if used. raidz1 is the default (like RAID5, allows 1 disk to fail, "" will let ZFS work with no raid/just join the drives together)
 zfs_type: "raidz1"
 
 
-  
+

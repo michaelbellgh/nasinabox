@@ -351,10 +351,10 @@
                                                                                      
     - name: Make ZFS pool
       command: "zpool create NAS {{ vm_vars.zfs_type }} {{ vm_vars.zfs_drives | join(' ') }}"
-      when: vm_vars.zfs_drives |length > 0 and 'NAS' not in zfacts.stdout                                     
+      when: vm_vars.zfs_drives |length > 0 and 'NAS' not in zfacts.stdout                          
 
     - name: Make ZFS pool (force)
-      command: "zpool create NAS raidz {{ zfs_list }} -f"
+      command: "zpool create NAS {{ vm_vars.zfs_type }} {{ zfs_list }} -f"
       when: vm_vars.zfs_drives |length > 0 and ('NAS' not in zfs_pools.stdout and force is defined)
 
 
