@@ -12,6 +12,10 @@
         file: ../data/vars/vm.yml
         name: vm_vars
 
+    - name: Set customisation facts
+      set_facts:
+        cert_subject: "nasinabox.local"
+
     - name: Ignore host key on first run
       set_fact:
         ansible_ssh_extra_args: '-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'
@@ -67,7 +71,8 @@
           ff02::2 ip6-allrouters
     
     - name: Set system settings (apply)
-      command: "sysctl -p"
+      command: "sysctl --system"
+      when: set_system_settings.changed
     
 
     - name: Generate static IP configuration
@@ -93,6 +98,13 @@
       become: yes
       async: 100
       poll: 0
+      when: netplan_setup.changed
+
+    - name: Wait for new ip to be reachable
+      wait_for:
+        host: "{{ vm_vars.static_ip | ansible.utils.ipaddr('address') }}"
+        port: 22
+        connect_timeout: 10
       when: netplan_setup.changed
 
     - name: Set new IP fact
@@ -168,7 +180,7 @@
       openssl_csr:
         path: /tmp/root.csr
         privatekey_path: "{{ root_key.filename }}"
-        common_name: "nasinabox"
+        common_name: "{{ cert_subject }}"
       register: root_csr
       when: root_key.changed
 
