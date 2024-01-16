@@ -13,8 +13,8 @@
         name: vm_vars
 
     - name: Set customisation facts
-      set_facts:
-        cert_subject: "nasinabox.local"
+      set_fact:
+        cert_subject: "{{ vm_vars.vminfo.hostname }}"
 
     - name: Ignore host key on first run
       set_fact:
