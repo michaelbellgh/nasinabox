@@ -13,7 +13,7 @@ customisation_params = {
     "sonarr_path": "/sonarr",
     "lidarr_path": "/lidarr",
     "radarr_path": "/radarr",
-    "torrent_path": "/deluge",
+    "torrent_path": "/", #note - this needs to be / for most cases!
     "ombi_path": "/ombi",
     "validate_ssl": False,
     "preferr_dv": True
@@ -243,7 +243,7 @@ def darr_add_root_folder(darr : darr_instance, name, path, api_version="v3", add
 def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: str, torrent_port: int, torrent_path: str, torrent_username: str, torrent_password: str, implementation: str="Transmission", api_version="v3"):
     body = {"configContract" : implementation + "Settings", "enable": True, "implementation" : implementation, "implementationName" : implementation, "name" : name, "priority" : 1, "protocol" : "torrent", "tags" : []}
     fields = []
-    fields.append({"name" : "host", "value" : name})
+    fields.append({"name" : "host", "value" : torrent_hostname})
     fields.append({"name" : "port", "value" : torrent_port})
     fields.append({"name" : "urlBase", "value" : torrent_path})
     if torrent_username is not None:
