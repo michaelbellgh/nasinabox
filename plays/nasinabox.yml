@@ -16,10 +16,14 @@
     - name: Set customisation facts
       set_fact:
 <<<<<<< HEAD
+<<<<<<< HEAD
         cert_subject: "{{ vm_vars.vminfo.hostname }}"
 =======
         cert_subject: "{{ vm_vars.vminfo.hostname }}.local"
 >>>>>>> dcd3de3 (Changed Deluge version to fix base url bug)
+=======
+        cert_subject: "{{ vm_vars.vminfo.hostname }}.local"
+>>>>>>> dev
 
     - name: Ignore host key on first run
       set_fact:
