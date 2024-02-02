@@ -41,7 +41,7 @@
 				{
 				"match": 
 				[{
-					"path": [{% for path in app.paths %}"{{ path }}"{% if not loop.last %},{% endif %}{% endfor %}]
+					"path": [{% for path in app.dsts %}"{{ path }}"{% if not loop.last %},{% endif %}{% endfor %}]
 				}],
 				"handle": [
 					{
