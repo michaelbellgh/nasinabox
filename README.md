@@ -18,11 +18,12 @@ nasinabox is a portable NAS that can run in a VM or physical machine. Users can 
 ## Installation
 
 nasinabox is designed to configure a blank, Ubuntu server image. 
-This should be deployed in advance, with two hard drives.
+This should be deployed in advance, with two or more hard drives.
 
 
 The recommended version of Ubuntu is 22.04 Server with the minimized install
-8GB of RAM, 4 CPU cores is recommended, with a 100GB HDD and a secondary larger storage drive
+16GB of RAM (but can get away with 8), 4 CPU cores is recommended, with a 100GB HDD and a secondary larger storage drive.
+More drives are recommended, so you can use raidz1 n+1 redundancy with ZFS
 
 First, copy the following templates into new locations:
 > cp data/vars/vm.yml.example data/vars/vm.yml
@@ -38,7 +39,7 @@ Edit the above files to match your installation, e.g. if your details for your s
 Set the values in inventory/standalone as:
 ```
 [nas]
-192.168.1.50 ansible_become_password=mypassword ansible_user=nasinabox ansible_password=mypassword
+192.168.1.50 ansible_become_password=mypassword ansible_user=nasinabox ansible_password=nasinabox
 ```
 
 Set the values in data/vars/vm.yml as:
@@ -72,6 +73,9 @@ This project only has custom ansible playbooks and python configuration scripts 
 - Plex - Media player and server (https://www.plex.tv/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/plex)
 - Ombi - Plex and downloader (sonarr, radarr, lidarr) request frontend (https://ombi.io/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/ombi/)
 - Prowlarr (sonarr, radarr, lidarr, readarr) specialised indexer manager (https://prowlarr.com/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/prowlarr/)
+
+## Special Thanks and credits
+- Trash Guides (https://trash-guides.info/) for their excellent custom formats and quality profiles
 
 In addition to the above docker contaners, the configuration script (data/scripts/configure_apps.py) is included as part of this repo and will automatically configure the included applications to integrate with each other. 
 The exception to this is Ombi and Plex, as they require manual configuration with Plex credentials
