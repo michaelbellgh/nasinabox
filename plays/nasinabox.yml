@@ -3,6 +3,7 @@
    gather_facts: false
    hosts: nas
    become: yes
+   become_method: sudo
    tasks:
 
 
@@ -10,6 +11,11 @@
       include_vars:
         file: ../data/vars/vm.yml
         name: vm_vars
+      tags: ["test"]
+
+    - name: Set customisation facts
+      set_fact:
+        cert_subject: "{{ vm_vars.vminfo.hostname }}.local"
 
     - name: Ignore host key on first run
       set_fact:
@@ -24,12 +30,10 @@
         state: directory
         mode: '0744'
       with_items:
+       - "/var/www/ssl"
        - "/home/docker/docker_data/caddy"
-       - "/home/docker/docker_data/caddy/data"
        - "/home/docker/docker_data/caddy/config"
        - "/home/docker/docker_data/caddy/config/caddy"
-       - "/var/www/ssl"
-       - "/home/docker/docker_data/jackett/config/Jackett/"
 
     - name: Set system settings
       lineinfile:
@@ -37,21 +41,83 @@
         line: "{{ item.line }}"
       become: yes
       with_items:
-       - { path: "/etc/gai.conf", line: "precedence ::ffff:0:0/96  100" }
-       - { path: "/etc/sysctl.conf", line: "net.core.rmem_max = 4194304" }
-       - { path: "/etc/sysctl.conf", line: "net.core.wmem_max = 1048576" }
-       - { path: "/etc/sysctl.conf", line: "fs.file-max = 10000000" }
-       - { path: "/etc/security/limits.conf", line: "root   soft    nofile    10000000"}
-       - { path: "/etc/security/limits.conf", line: "root   hard    nofile    10000000"}
-       - { path: "/etc/sysctl.conf", line: "net.ipv6.conf.all.disable_ipv6 = 1"}
-       - { path: "/etc/sysctl.conf", line: "net.ipv6.conf.default.disable_ipv6 = 1"}
-       - { path: "/etc/sysctl.conf", line: "net.ipv6.conf.lo.disable_ipv6 = 1"}
+       - { path: "/etc/gai.conf", regexp: '^([\s#])?precedence\N+', line: "precedence ::ffff:0:0/96  100" }
+       - { path: "/etc/security/limits.conf", regexp: '^([\s#])?root\s+soft\s+nofile\s+', line: "root   soft    nofile    10000000"}
+       - { path: "/etc/security/limits.conf", regexp: '^([\s#])?root\s+hard\s+nofile\s+', line: "root   hard    nofile    10000000"}
       register: set_system_settings
+
+    - name: Set SYSCTL settings
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        sysctl_set: true
+        reload: true
+      with_items:
+       - { name: "net.core.rmem_max", value: 4194304}
+       - { name: "net.core.wmem_max", value: 1048576}
+       - { name: "fs.file-max", value: 10000000}
+       - { name: "net.ipv6.conf.all.disable_ipv6", value: 1}
+       - { name: "net.ipv6.conf.default.disable_ipv6", value: 1}
+       - { name: "net.ipv6.conf.all.disable_ipv6", value: 1}
+       - { name: "net.ipv6.conf.all.autoconf", value: 0}
+       - { name: "net.ipv6.conf.all.accept_ra", value: 0}
+       
+
+    - name: Set hostname
+      ansible.builtin.hostname:
+        name: "{{ vm_vars.vminfo.hostname }}"
+
+    - name: "Build hosts file"
+      copy: 
+        dest: /etc/hosts
+        content: |
+          127.0.0.1 localhost
+          127.0.1.1 {{ vm_vars.vminfo.hostname }}
+
+          # The following lines are desirable for IPv6 capable hosts
+          ::1     ip6-localhost ip6-loopback
+          fe00::0 ip6-localnet
+          ff00::0 ip6-mcastprefix
+          ff02::1 ip6-allnodes
+          ff02::2 ip6-allrouters
     
-    - name: Set system settings (apply)
-      command: "sysctl -p"
-      when: set_system_settings.changed
-    
+    - name: Remove default netplan config
+      file:
+        path: "/etc/netplan/00-installer-config.yaml"
+        state: absent
+      when: "vm_vars.use_custom_netplan"
+
+    - name: Install netplan configuration
+      copy:
+        dest: "/etc/netplan/custom.yaml"
+        src: "../data/netplan/custom.yaml"
+      when: "'use_custom_netplan' in vm_vars and vm_vars['use_custom_netplan'] | bool"
+      register: netplan_setup
+
+    - name: Netplan apply
+      command: netplan apply
+      become: yes
+      async: 100
+      poll: 0
+      when: netplan_setup.changed
+
+    - name: Set new IP fact
+      set_fact:
+        ansible_host: "{{ vm_vars.mgmt_ip | ansible.utils.ipaddr('address') }}"
+      when: netplan_setup.changed
+
+    - name: Wait for new ip to be reachable
+      wait_for:
+        host: "{{ vm_vars.mgmt_ip | ansible.utils.ipaddr('address') }}"
+        port: 22
+        connect_timeout: 10
+      when: netplan_setup.changed
+
+
+    - name: Re-acquire facts
+      setup:
+      when: netplan_setup.changed
 
     - name: Upgrade packages and distro
       apt:
@@ -102,8 +168,11 @@
           - open-vm-tools
           - tailscale
           - zfsutils
+          - python3-pip
+          - python3-docker
         state: present
       become: yes
+
 
     - name: create root key
       openssl_privatekey:
@@ -114,7 +183,7 @@
       openssl_csr:
         path: /tmp/root.csr
         privatekey_path: "{{ root_key.filename }}"
-        common_name: "nasinabox"
+        common_name: "{{ cert_subject }}"
       register: root_csr
       when: root_key.changed
 
@@ -153,7 +222,7 @@
 
 
     - name: Copy all certs
-      copy:
+      ansible.builtin.copy:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
         force: yes
@@ -166,16 +235,25 @@
        - { src: "/tmp/webca.pem", dest: "/root/webca.pem"}
       when: root_key.changed
 
-    - name: Set caddy default port (if ssl)
+    - name: Copy custom root CA's
+      copy:
+        src: "{{ item }}"
+        dest: "/usr/local/share/ca-certificates/"
+      with_fileglob:
+       - "../data/certs/*.crt"
+      
+
+    - name: Set Caddy default port (if ssl)
       set_fact: 
         caddy_default_port: "443"
-        caddy_default_scheme: "https"
+        default_scheme: "https"
       when: vm_vars.nas.default_to_ssl is defined and vm_vars.nas.default_to_ssl
+      tags: ["test"]
 
     - name: Set Caddy default port (if not ssl)
       set_fact:
         caddy_default_port: "80"
-        caddy_default_scheme: "http"
+        default_scheme: "http"
       when: vm_vars.nas.default_to_ssl is not defined or (vm_vars.nas.default_to_ssl is defined and not vm_vars.nas.default_to_ssl)
         
 
@@ -192,8 +270,25 @@
       with_items:
        - { src: "../data/homer/icons/", dest: "/home/docker/docker_data/homer/icons/", force: yes}
 
-
-    
+    - name: Template sites
+      template:
+        src: ../data/caddy/sites.j2
+        dest: /home/docker/docker_data/caddy/config/sites.json
+        force: yes
+      vars:
+        apps:
+        - {name: "sonarr", dsts: ["/sonarr*"], dial: "sonarr:8989" }
+        - {name: "radarr", dsts: ["/radarr*"], dial: "radarr:7878" }
+        - {name: "ombi", dsts: ["/ombi*"], dial: "ombi:3579" }
+        - {name: "lidarr", dsts: ["/lidarr*"], dial: "lidarr:8686" }
+        - {name: "bazarr", dsts: ["/bazarr*"], dial: "bazarr:6767" }
+        - {name: "readarr", dsts: ["/readarr*"], dial: "readarr:8787" }
+        - {name: "prowlarr", dsts: ["/prowlarr*"], dial: "prowlarr:9696" }
+        - {name: "deluge", dsts: ["/deluge*"], dial: "deluge:8112", stripprefix: "/deluge" }
+        - {name: "homer", dsts: ["/*"], dial: "homer:8080" }
+        - {name: "deemix", dsts: ["/deemix*"], dial: "deemix:6595"}
+      
+      
     - name: Enable unattended-upgrades
       lineinfile:
         path: /etc/apt/apt.conf.d/20auto-upgrades
@@ -208,7 +303,7 @@
     - name: create internal docker network
       community.general.docker_network:
         name: docker
-
+        enable_ipv6: true
 
     - name: Add groups
       group:
@@ -226,84 +321,54 @@
         shell: /bin/bash
         createhome: yes
 
-    - name: Check if Storage exist
-      stat:
-        path: /dev/sdb
-      register: storage_exists
-      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length == 0)
+    - name: Set ZFS variables
+      set_fact:
+        single_disk: "{{ vm_vars.zfs_drives | length == 0 }}"
 
-    - name: Check if partition exists
-      stat:
-        path: /dev/sdb1
-      register: partition_exists
-      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length == 0)
-
-
-    - name: Make partition
-      parted:
-        device: /dev/sdb
-        number: 1
-        state: present
-      when: vm_vars.zfs_drives is defined and ("vm_vars.zfs_drives |length == 0 and storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool")
-      
-
-    - name: Make filesystem
-      filesystem:
-        fstype: ext4
-        dev: /dev/sdb1
-      when:  vm_vars.zfs_drives is defined and ("vm_vars.zfs_drives is|length == 0 and storage_exists.stat.exists|bool and not partition_exists.stat.exists|bool")
-
-    - name: Mount drives
-      mount:
-        path: "{{ item.path }}"
-        src: "{{ item.src }}"
-        state: present
-        fstype: ext4
-      with_items: 
-       - { path: "{{ vm_vars.nas.storage_path }}", src: "/dev/sdb1"}
-      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length == 0 and storage_exists.stat.exists|bool)
+    - name: Make mount point
+      file: 
+        path: "{{ vm_vars.nas.storage_path | default('/mnt/Storage/') }}"
+        state: directory
+      when: single_disk
 
     - name: Get zpool info
       command: "zfs list"
       register: zfacts
-      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length > 0)
-      
+      when: not single_disk 
+
     - name: Try import NAS pool
       command: "zpool import NAS -f"
-      when: 'vm_vars.zfs_drives is defined and "{{ vm_vars.nas.storage_path }}" not in zfacts.stdout'
+      when: '"{{ vm_vars.nas.storage_path }}" not in zfacts.stdout and not single_disk'
       register: try_import
       ignore_errors: yes
                                                                                      
     - name: Get ZFS pools
       command: "zfs list"
       register: zfs_pools
-      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length > 0)           
+      when: not single_disk               
                                                                                      
     - name: Make ZFS pool
       command: "zpool create NAS {{ vm_vars.zfs_type }} {{ vm_vars.zfs_drives | join(' ') }}"
-      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length > 0 and 'NAS' not in zfacts.stdout)                                   
+      when: not single_disk and 'NAS' not in zfs_pools.stdout                       
 
     - name: Make ZFS pool (force)
-      command: "zpool create NAS raidz {{ zfs_list }} -f"
-      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length > 0 and ('NAS' not in zfs_pools.stdout and force is defined))
+      command: "zpool create NAS {{ vm_vars.zfs_type }} {{ zfs_list }} -f"
+      when: not single_disk and ('NAS' not in zfs_pools.stdout and force is defined)
+
+
 
 
     - name: Mount ZFS pool
       command: "zfs set mountpoint={{ vm_vars.nas.storage_path }} NAS"
-      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives is defined and vm_vars.zfs_drives |length > 0)
-
-    - name: Make mount point
-      file: 
-        path: "{{ vm_vars.nas.storage_path }}"
-        state: directory
-      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length == 0)
+      when: vm_vars.zfs_drives is defined and not single_disk
+      ignore_errors: yes
 
     - name: Fallback to fix mount module issue
       command: "mount {{ item }}"
       with_items: 
        - "{{ vm_vars.nas.storage_path }}"
       ignore_errors: yes
-      when: vm_vars.zfs_drives is defined and (vm_vars.zfs_drives |length == 0)
+      when: vm_vars.zfs_drives |length == 0
 
     - name: Set permissions on Storage
       file:
@@ -311,24 +376,7 @@
         mode: '644'
         state: directory
       become: yes
-
-    - name: Template sites
-      template:
-        src: ../data/caddy/sites.j2
-        dest: /home/docker/docker_data/caddy/config/caddy/sites.json
-        force: yes
-      vars:
-        apps:
-         - {name: "sonarr", server_paths: ["/sonarr", "/sonarr/*"], "dial": "sonarr:8989" }
-         - {name: "radarr", server_paths: ["/radarr", "/radarr/*"], "dial": "radarr:7878" }
-         - {name: "ombi", server_paths: ["/ombi", "/ombi/*"], "dial": "ombi:3579" }
-         - {name: "lidarr", server_paths: ["/lidarr", "/lidarr/*"], "dial": "lidarr:8686" }
-         - {name: "bazarr", server_paths: ["/bazarr", "/bazarr/*"], "dial": "bazarr:6767" }
-         - {name: "jackett", server_paths: ["/jackett", "/jackett/*"], "dial": "jackett:9117" }
-         - {name: "readarr", server_paths: ["/readarr", "/readarr/*"], "dial": "readarr:8787" }
-         - {name: "prowlarr", server_paths: ["/prowlarr", "/prowlarr/*"], "dial": "prowlarr:9696" }
-         - {name: "deluge", server_paths: ["/deluge", "/deluge/*"], "dial": "deluge:8112", stripprefix: "/deluge" }
-         - {name: "homer", server_paths: ["/", "/*"], "dial": "homer:8080" }
+      when: skippermissions is not defined
 
 
     - name: Get homer theme
@@ -382,13 +430,15 @@
          PGID: "1001"
         networks:
          - name: docker
+        published_ports: ["6881:6881", "6881:6881/udp"]
         volumes:
         - /home/docker/docker_data/deluge/config:/config
         - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         - "{{ vm_vars.nas.storage_path }}Downloads/watch:/watch"
         - "{{ vm_vars.nas.storage_path }}Downloads/incomplete:/incomplete"
         - /var/www/ssl/:/ssl
-        restart_policy: unless-stopped
+        restart_policy: always
+
       register: docker_deluge
 
     - name: Start plex
@@ -405,25 +455,9 @@
         - "{{ vm_vars.nas.storage_path }}Movies:/movies"
         - "{{ vm_vars.nas.storage_path }}TV:/tv"
         - /var/www/ssl/:/ssl
-        restart_policy: unless-stopped
+        restart_policy: always
       register: docker_plex
 
-    - name: Start jackett
-      docker_container:
-        name: jackett
-        image: linuxserver/jackett
-        env: 
-         TZ: Australia/Melbourne
-         AUTO_UPDATE: "true"
-         PUID: "1001"
-         PGID: "1001"
-        networks:
-        - name: docker
-        volumes:
-        - /home/docker/docker_data/jackett/config:/config
-        - /var/www/ssl/:/ssl
-        restart_policy: unless-stopped
-      register: docker_jackett
 
     - name: Start lidarr
       docker_container:
@@ -435,13 +469,13 @@
          PGID: "1001"
         networks:
         - name: "docker"
-          links: ["jackett", "deluge"]
         volumes:
         - /home/docker/docker_data/lidarr/config:/config
         - "{{ vm_vars.nas.storage_path }}Music:/music"
         - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         - "/var/www/ssl/:/ssl"
-        restart_policy: unless-stopped
+        restart_policy: always
+
       register: docker_lidarr
 
     - name: Start radarr
@@ -454,13 +488,13 @@
          PGID: "1001"
         networks:
         - name: "docker"
-          links: ["deluge", "jackett"]
         volumes:
         - /home/docker/docker_data/radarr/config:/config
         - "{{ vm_vars.nas.storage_path }}Movies:/movies"
         - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         - "/var/www/ssl/:/ssl"
-        restart_policy: unless-stopped
+        restart_policy: always
+
       register: docker_radarr
 
     - name: Start sonarr
@@ -473,13 +507,13 @@
          PGID: "1001"
         networks:
         - name: "docker"
-          links: ["jackett", "deluge"]
         volumes:
         - /home/docker/docker_data/sonarr/config:/config
         - "{{ vm_vars.nas.storage_path }}TV:/tv"
         - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         - /var/www/ssl/:/ssl
-        restart_policy: unless-stopped
+        restart_policy: always
+
       register: docker_sonarr
 
     - name: Start ombi
@@ -493,18 +527,18 @@
          PGID: "1001"
         networks:
         - name: "docker"
-          links: ["sonarr", "radarr", "ombi"]
         volumes:
         - /home/docker/docker_data/ombi/config:/config
         - "/var/www/ssl/:/ssl"
-        restart_policy: unless-stopped
+        restart_policy: always
+
       register: docker_ombi
 
 
     - name: Start bazarr
       docker_container:
         name: bazarr
-        image: linuxserver/bazarr
+        image: linuxserver/bazarr:development
         env: 
          TZ: Australia/Melbourne
          PUID: "1001"
@@ -518,14 +552,15 @@
         - "{{ vm_vars.nas.storage_path }}Movies:/movies"
         - "{{ vm_vars.nas.storage_path }}TV:/tv"
         - "/var/www/ssl/:/ssl"
-        restart_policy: unless-stopped
+        restart_policy: always
+
       register: docker_bazarr
 
 
     - name: Start prowlarr
       docker_container:
         name: prowlarr
-        image: lscr.io/linuxserver/prowlarr:develop
+        image: lscr.io/linuxserver/prowlarr:latest
         env: 
          TZ: Australia/Melbourne
          PUID: "1001"
@@ -533,12 +568,30 @@
         published_ports: ["9696:9696"]
         networks:
         - name: "docker"
-          links: ["sonarr", "radarr"]
+          links: ["sonarr", "radarr", "readarr", "deluge"]
         volumes:
-        - /home/docker/docker_data/prowlarr/config:/config
+        - /home/docker/docker_data/prowlarr:/config
         - "/var/www/ssl/:/ssl"
-        restart_policy: unless-stopped
+        restart_policy: always
+
       register: docker_prowlarr
+
+
+    - name: Start FlareSolverr
+      docker_container:
+        name: flaresolverr
+        image: flaresolverr/flaresolverr
+        env: 
+         TZ: Australia/Melbourne
+         PUID: "1001"
+         PGID: "1001"
+        volumes:
+        - "/var/www/ssl/:/ssl"
+        restart_policy: always
+        networks:
+         - name: docker
+      register: docker_flaresolverr
+
 
     - name: Start readarr
       docker_container:
@@ -550,12 +603,14 @@
          PGID: "1001"
         volumes:
         - "/home/docker/docker_data/readarr:/config"
+        - "/mnt/Storage/Downloads:/downloads"
         - "{{ vm_vars.nas.storage_path }}Books:/books"
         - "/var/www/ssl/:/ssl"
-        restart_policy: unless-stopped
+        restart_policy: always
         networks:
         - name: "docker"
           links: ["jackett", "deluge"]
+
       register: docker_readarr
 
     - name: Start Homer
@@ -570,7 +625,8 @@
         - /home/docker/docker_data/homer:/www/assets
         networks:
          - name: docker
-        restart_policy: unless-stopped
+        restart_policy: always
+
       register: docker_homer
 
 
@@ -599,26 +655,29 @@
          - "-s Share;/share;yes;no;yes;all;none"
          - "-s Files;/files;yes;no;yes;all;none"
         command_handling: correct
-        restart_policy: unless-stopped
-
+        restart_policy: always
 
     - name: Run caddy
       docker_container:
         name: caddy
-        published_ports: ["80:80", "443:443", "2019:2019"]
-        recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_readarr.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
+        published_ports: ["2019:2019", "443:443", "80:80"]
+#        recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_readarr.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
         image: "caddy:latest"
-        restart_policy: unless-stopped
+        restart_policy: always
+#        command: ["caddy run --config /config/sites.json"]
+        command: "caddy run --config /config/sites.json" 
+        networks:     
+          - name: docker
         volumes:
         - "/var/run/docker.sock:/var/run/docker.sock"
         - "/var/www/ssl/:/ssl"
-        - "/home/docker/docker_data/caddy/data:/data"
-        - "/home/docker/docker_data/caddy/config:/config"
+        - "/home/docker/docker_data/caddy/config:/config/"
+        - "/home/docker/docker_data/caddy/data:/data/"
         - "/root/webca.crt:/webca.crt"
         - "/root/webca.pem:/webca.pem"
-        command: caddy run --config /config/caddy/sites.json
-        networks:
-         - name: docker
+        comparisons:
+         networks: strict
+
 
     - name: Set permissions (mode)
       file:
@@ -626,22 +685,12 @@
         recurse: yes
         mode: '777'
       become: yes
+      when: skippermissions is not defined
 
 
     - name: Stop all docker containers
       shell: "docker kill $(docker ps -q)"
-    
-    - name: Copy Indexers zip
-      copy:
-        src: ../data/jackett/Indexers.zip
-        dest: /home/docker/docker_data/jackett/config/Jackett/Indexers.zip
 
-
-    - name: Unarchive Indexers.zip
-      unarchive:
-        src: /home/docker/docker_data/jackett/config/Jackett/Indexers.zip
-        remote_src: yes
-        dest: /home/docker/docker_data/jackett/config/Jackett/
 
     - name: Check if deluge web.conf is missing
       stat: 
@@ -651,29 +700,33 @@
     
     - name: Set deluge webconf fact
       set_fact:
-        deluge_web_conf_contents: '
-        {
-        "file": 2,
-        "format": 1
-        }{
-        "base" : "/deluge",
-        "cert": "ssl/daemon.cert",
-        "default_daemon": "",
-        "enabled_plugins": ["Label", "Execute"],
-        "first_login": false,
-        "https": false,
-        "interface": "0.0.0.0",
-        "language": "",
-        "pkey": "ssl/daemon.pkey",
-        "port": 8112,
-        "pwd_salt": "c26ab3bbd8b137f99cd83c2c1c0963bcc1a35cad",
-        "pwd_sha1": "2ce1a410bcdcc53064129b6d950f2e9fee4edc1e",
-        "session_timeout": 3600,
-        "show_session_speed": false,
-        "show_sidebar": true,
-        "sidebar_multiple_filters": true,
-        "sidebar_show_zero": false,
-        "theme": "gray"}'
+        deluge_web_conf_contents: |
+          {
+              "file": 2,
+              "format": 1
+          }{
+              "base": "/deluge",
+              "cert": "ssl/daemon.cert",
+              "default_daemon": "",
+              "enabled_plugins": [
+                  "Label",
+                  "Execute"
+              ],
+              "first_login": false,
+              "https": false,
+              "interface": "0.0.0.0",
+              "language": "",
+              "pkey": "ssl/daemon.pkey",
+              "port": 8112,
+              "pwd_salt": "c26ab3bbd8b137f99cd83c2c1c0963bcc1a35cad",
+              "pwd_sha1": "2ce1a410bcdcc53064129b6d950f2e9fee4edc1e",
+              "session_timeout": 3600,
+              "show_session_speed": false,
+              "show_sidebar": true,
+              "sidebar_multiple_filters": true,
+              "sidebar_show_zero": false,
+              "theme": "gray"
+          }
       when: not deluge_web_conf.stat.exists
 
     - name: Set deluge webconf
@@ -719,12 +772,11 @@
         path: "{{ item.path }}"
       with_items:
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/lidarr</UrlBase>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
-       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/prowlarr</UrlBase>", path: "/home/docker/docker_data/prowlarr/config/config.xml"}
+       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/prowlarr</UrlBase>", path: "/home/docker/docker_data/prowlarr/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/sonarr</UrlBase>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/radarr</UrlBase>", path: "/home/docker/docker_data/radarr/config/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/readarr</UrlBase>", path: "/home/docker/docker_data/readarr/config.xml"}
-       - { regexp: 'base_url.+\=(.+)*', line: "base_url = /bazarr", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
-       - { regexp: '"BasePathOverride"(\s+)?\:\s+[^,\r\n]+', line: '"BasePathOverride": "/jackett"', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
+       - { regexp: "base_url:.+", line: "base_url: '/bazarr'", path: "/home/docker/docker_data/bazarr/config/config/config.yaml"}
        - { regexp: '"base":\s+".+"', line: '  "base" : "/deluge"', path: "/home/docker/docker_data/deluge/config/web.conf"}
       register: url_base_output
 
@@ -737,12 +789,12 @@
         replace: "{{ item.line }}"
       with_items:
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/lidarr/config/config.xml"}
-        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/prowlarr/config/config.xml"}
+        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/prowlarr/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/radarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/readarr/config.xml"}
-        - { regexp: 'apikey[\s\=]*[a-zA-Z0-9]*', line: "apikey = {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.ini"}
-        - { regexp: '"APIKey"\s*\:\s*"[a-zA-Z0-9]*"', line: '"APIKey" : "{{ vm_vars.api_key }}"', path: "/home/docker/docker_data/jackett/config/Jackett/ServerConfig.json"}
+        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/prowlarr/config.xml"}
+        - { regexp: 'apikey:.+', line: "apikey: {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.yaml"}
       register: api_change_output
 
     - name: Set Ombi API key (script creation)
@@ -781,24 +833,28 @@
     "sidebar_show_zero": false,
     "theme": "gray"
 }'
-      when: not deluge_web_conf.stat.exists
 
- 
-    - name: Restart deluge, allow web.conf generation
+    - name: Copy deluge web.conf
       copy:
-        dest: /home/docker/docker_data/deluge/config/web.conf
         content: "{{ deluge_web_conf_content }}"
-        
-      become: yes
-      when: not deluge_web_conf.stat.exists
+        dest: /home/docker/docker_data/deluge/config/web.conf
+        force: yes
+
+    - name: Get host info
+      community.docker.docker_host_info:
+        containers: yes
+        images: yes
+        containers_all: true
+      register: docker_info
+
 
     - name: Restart certain containers if containers API, URL base or other params have changed
       docker_container:
         name: "{{ item }}"
         state: started
-        restart: yes
         comparisons: {"*": "ignore"}
-      with_items: ["lidarr", "sonarr", "radarr", "bazarr", "readarr", "jackett", "deluge", "ombi", "prowlarr", "caddy"]
+        restart: yes
+      loop: "{{ docker_info.containers | map(attribute='Id') }}"
       when: url_base_output.changed or api_change_output.changed
     
 
@@ -807,7 +863,6 @@
         src: ../data/homer/homer.j2
         dest: /home/docker/docker_data/homer/config.yml
         mode: '0777'
-        force: yes
 
     - name: Set homer permissions
       file:
@@ -824,54 +879,76 @@
         mode: "{{ item.mode }}"
       become: yes
       with_items:
-       - { path: "{{ vm_vars.nas.storage_path }}", owner: media, group: media, mode: '0744' }
        - { path: "/home/docker/docker_data/", owner: media, group: media, mode: '0744' }
        - { path: "/home/docker/docker_data/homer", owner: media, group: media, mode: '0777'}
       register: final_permissions_dir
 
-
-    - name: Start docker containers
-      shell: "docker start $(docker ps -a -q)"
-
-    - name: Wait for return code
-      uri:
-        url: "{{ caddy_default_scheme }}://{{ ansible_default_ipv4.address }}:{{ caddy_default_port }}/{{ item }}"
-        status_code: 200
-        validate_certs: false
-      register: result
-      until: result.status == 200
-      retries: 60
-      delay: 1
+    - name: Set permissions on dirs, long
+      file:
+        path: "{{ item.path }}"
+        recurse: yes
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      become: yes
       with_items:
-       - "sonarr"
-       - "lidarr"
-       - "radarr"
-       - "readarr"
-       - "prowlarr"
-       - "bazarr"
-       - "jackett"
+       - { path: "{{ vm_vars.nas.storage_path }}", owner: media, group: media, mode: '0744' }
+      register: final_permissions_dir_slow
+      when: skippermissions is not defined
 
+
+    - name: Get host info
+      community.docker.docker_host_info:
+        containers: yes
+        images: yes
+        containers_all: true
+      register: docker_info
+
+
+    - name: Restart certain containers if containers API, URL base or other params have changed
+      docker_container:
+        name: "{{ item }}"
+        state: started
+        comparisons: {"*": "ignore"}
+        restart: yes
+      loop: "{{ docker_info.containers | map(attribute='Id') }}"
+
+    - local_action: stat path=custom.yml
+      register: custom_tasks_exist
+      become: no
+      tags: ["test"]
+
+    - name: Run customisation tasks
+      include_tasks:
+        file: custom.yml
+      when: custom_tasks_exist.stat.exists
+      tags: ["test"]
 
     - name: Set configurator fact base
       set_fact:
-        cf_string: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p {{ caddy_default_port }} -a {{ vm_vars.api_key }} -s {{ caddy_default_scheme }}"
+        cf_string: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p {{ caddy_default_port }} -a {{ vm_vars.api_key }} -s {{ default_scheme }}"
+      when: domain_name is not defined
+
+    - name: Set configurator fact base (domain)
+      set_fact:
+        cf_string: "python3 configure_apps.py -i {{ domain_name }} -p {{ caddy_default_port }} -a {{ vm_vars.api_key }} -s {{ default_scheme }}"
+      when: domain_name is defined
 
     - name: Add optional vars
       set_fact: 
         cf_string: "{{ cf_string + ' '  + item.key + ' ' + item.value }}"
-      when: item != None
+      when: item != None and item.value != ""
       with_items:
-       - {key: "--open-subtitles-username", value: "{{ vm_vars.nas.open_subtitles_username | quote }}"}
-       - {key: "--open-subtitles-password", value: "{{ vm_vars.nas.open_subtitles_password | quote }}"}
-       - {key: "--plex-username", value: "{{ vm_vars.plex_username | quote }}"}
-       - {key: "--plex-password", value: "{{ vm_vars.plex_password | quote }}"}
-       - {key: "--app-username", value: "{{ vm_vars.local_username | quote }}"}
-       - {key: "--app-password", value: "{{ vm_vars.local_password | quote }}"}
+       - {key: "--open-subtitles-username", value: "{{ vm_vars.nas.open_subtitles_username | default(None) | quote or omit }}"}
+       - {key: "--open-subtitles-password", value: "{{ vm_vars.nas.open_subtitles_password | default(None) | quote or omit }}"}
+       - {key: "--plex-username", value: "{{ vm_vars.plex_username | default(None) | quote or omit }}"}
+       - {key: "--plex-password", value: "{{ vm_vars.plex_password | default(None) | quote or omit }}"}
+       - {key: "--app-username", value: "{{ vm_vars.local_username | default(None) | quote or omit }}"}
+       - {key: "--app-password", value: "{{ vm_vars.local_password | default(None) | quote or omit }}"}
 
     - name: debug
       debug:
         msg: "{{ cf_string }}"
-
 
     - name: Run configurator (with opensubtitles support)
       command: "{{ cf_string }}"
@@ -898,8 +975,8 @@
 
 
     - name: Connect tailscale
-      command: "tailscale up --authkey {{ vm_vars.tailscale_auth_key }}"
-      when: vm_vars.tailscale_auth_key is defined
+      command: "tailscale up --authkey {{ vm_vars.tailscale_auth_key }} --accept-routes"
+      when: vm_vars.tailscale_auth_key is defined and vm_vars.tailscale_auth_key != None
 
 
 
