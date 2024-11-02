@@ -70,7 +70,7 @@ This project only has custom ansible playbooks and python configuration scripts 
 - Jackett - Torznab torrent indexer (https://github.com/Jackett/Jackett) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/jackett)
 - Samba - SMB server (https://www.samba.org/) running on docker container by dperson (https://hub.docker.com/r/dperson/samba)
 - Plex - Media player and server (https://www.plex.tv/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/plex)
-- Ombi - Plex and downloader (sonarr, radarr, lidarr) request frontend (https://ombi.io/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/ombi/)
+- Overseerr - Plex and downloader (sonarr, radarr) request frontend (https://overseerr.dev/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/overseerr)
 - Prowlarr (sonarr, radarr, lidarr, readarr) specialised indexer manager (https://prowlarr.com/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/prowlarr/)
 
 In addition to the above docker contaners, the configuration script (data/scripts/configure_apps.py) is included as part of this repo and will automatically configure the included applications to integrate with each other. 

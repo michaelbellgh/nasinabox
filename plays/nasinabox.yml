@@ -269,6 +269,8 @@
       become: yes
       with_items:
        - { src: "../data/homer/icons/", dest: "/home/docker/docker_data/homer/icons/", force: yes}
+       - { src: "../data/homer/light.jpg" , dest: "/home/docker/docker_data/homer/light.jpg", force: yes}
+       - { src: "../data/homer/dark.jpg" , dest: "/home/docker/docker_data/homer/dark.jpg", force: yes}
 
     - name: Template sites
       template:
@@ -279,7 +281,7 @@
         apps:
         - {name: "sonarr", dsts: ["/sonarr*"], dial: "sonarr:8989" }
         - {name: "radarr", dsts: ["/radarr*"], dial: "radarr:7878" }
-        - {name: "ombi", dsts: ["/ombi*"], dial: "ombi:3579" }
+        - {name: "overseerr", dsts: ["/overseerr*"], dial: "overseerr:5055" }
         - {name: "lidarr", dsts: ["/lidarr*"], dial: "lidarr:8686" }
         - {name: "bazarr", dsts: ["/bazarr*"], dial: "bazarr:6767" }
         - {name: "readarr", dsts: ["/readarr*"], dial: "readarr:8787" }
@@ -516,23 +518,23 @@
 
       register: docker_sonarr
 
-    - name: Start ombi
+    - name: Start overseerr
       docker_container:
-        name: ombi
-        image: linuxserver/ombi
+        name: overseerr
+        image: linuxserver/overseerr:latest
+        published_ports: ["5055:5055"]
         env: 
          TZ: Australia/Melbourne
-         BASE_URL: "/ombi"
          PUID: "1001"
          PGID: "1001"
         networks:
         - name: "docker"
         volumes:
-        - /home/docker/docker_data/ombi/config:/config
+        - /home/docker/docker_data/overseerr/config:/config
         - "/var/www/ssl/:/ssl"
         restart_policy: always
 
-      register: docker_ombi
+      register: docker_overseer
 
 
     - name: Start bazarr
@@ -783,7 +785,7 @@
 
 
     - name: Set API Key to single key
-      replace:
+      ansible.builtin.replace:
         regexp: "{{ item.regexp }}"
         path: "{{ item.path }}"
         replace: "{{ item.line }}"
@@ -794,18 +796,11 @@
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/radarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/readarr/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/prowlarr/config.xml"}
+        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/prowlarr/config.xml"}
         - { regexp: 'apikey:.+', line: "apikey: {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.yaml"}
+
       register: api_change_output
 
-    - name: Set Ombi API key (script creation)
-      copy: 
-        dest: "/tmp/ombi.sql"
-        content: |
-          update GlobalSettings set Content = '{"BaseUrl":"/ombi","CollectAnalyticData":true,"Wizard":true,"ApiKey":"{{ vm_vars.api_key }}","DoNotSendNotificationsForAutoApprove":false,"HideRequestsUsers":false,"DisableHealthChecks":false,"DefaultLanguageCode":"en","AutoDeleteAvailableRequests":false,"AutoDeleteAfterDays":0,"Branch":0,"HasMigratedOldTvDbData":true,"Set":false,"Id":1}' where Id = 1;
-        mode: 0777
-
-    - name: Set Ombi API key (insert stage)
-      shell : "cat /tmp/ombi.sql |sqlite3 /home/docker/docker_data/ombi/config/OmbiSettings.db"
 
     - name: Generate Deluge web.conf
       set_fact:
@@ -863,6 +858,32 @@
         src: ../data/homer/homer.j2
         dest: /home/docker/docker_data/homer/config.yml
         mode: '0777'
+
+    - name: Query Plex API for machine ID
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:32400/identity"
+        method: GET
+        return_content: yes
+      register: plex_response
+      failed_when: "'machineIdentifier' not in plex_response.content"
+      retries: 5
+      delay: 10
+
+    - name: Parse machine ID from response
+      set_fact:
+        plex_machine_id: "{{ plex_response.content | regex_search('MachineIdentifier=\"([^\"]+)\"', '\\1') }}"
+
+    - name: Debug Plex machine ID
+      debug:
+        msg: "Plex Machine ID: {{ plex_machine_id }}"
+
+    - name: Template Overseerr dashboard
+      template:
+        src: ../data/overseerr/settings.j2
+        dest: /home/docker/docker_data/overseerr/config/settings.json
+        mode: '0777'
+      vars: { plex_ip: "{{ ansible_hostname }}.local"}
+
 
     - name: Set homer permissions
       file:
@@ -943,8 +964,9 @@
        - {key: "--open-subtitles-password", value: "{{ vm_vars.nas.open_subtitles_password | default(None) | quote or omit }}"}
        - {key: "--plex-username", value: "{{ vm_vars.plex_username | default(None) | quote or omit }}"}
        - {key: "--plex-password", value: "{{ vm_vars.plex_password | default(None) | quote or omit }}"}
-       - {key: "--app-username", value: "{{ vm_vars.local_username | default(None) | quote or omit }}"}
-       - {key: "--app-password", value: "{{ vm_vars.local_password | default(None) | quote or omit }}"}
+       - {key: "--app-username", value: "{{ vm_vars.nas_app_username | default(vm_vars.vminfo.hostname) | quote or omit }}"}
+       - {key: "--app-password", value: "{{ vm_vars.nas_app_password | default(vm_vars.vminfo.hostname) | quote or omit }}"}
+       - {key: "--internal-hostname", value: "{{ ansible_hostname }}"}
 
     - name: debug
       debug:

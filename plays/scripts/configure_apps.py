@@ -2,6 +2,8 @@ import threading
 import requests, json, argparse, os, json, glob
 import urllib3
 
+import xml.etree.ElementTree as ET
+
 from urllib.parse import quote
 
 urllib3.disable_warnings()
@@ -193,12 +195,19 @@ def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, 
     def ombi_std_put(endpoint, data):
         return requests.put(uri + endpoint, data=json.dumps(data), verify=validate_certificates, headers={"content-type" : "application/json", "ApiKey": api_key})
 
-    if plex_username is not None and plex_password is not None:
+    if plex_username is not None and plex_username != "" and plex_password is not None and plex_password != "":
         response = ombi_std_post("api/v1/Plex/", {"login": plex_username, "password": plex_password})
         response = ombi_std_post("api/v1/Identity/Wizard/", {"username":"","password":"","usePlexAdminAccount":True})
-
-    response = ombi_std_post("api/v2/wizard/config", {"applicationName": "Ombi", "applicationUrl": app_url, "logo": None})
-    response = ombi_std_post("api/v1/Identity/Wizard/", {"password": local_password, "username": local_username, "usePlexAdminAccount": False})
+    if local_username is not None and local_username != "" and local_password is not None and local_password != "":
+        response = ombi_std_post("api/v2/wizard/config", {"applicationName": "Ombi", "applicationUrl": app_url, "logo": None})
+        response = ombi_std_post("api/v1/Identity/Wizard/", {"password": local_password, "username": local_username, "usePlexAdminAccount": False})
+        if 'errors' not in response.json():
+            pass
+        elif response.json()["errors"][0] == "Looks like there is an existing user!":
+            response = ombi_std_put("api/v1/Identity/", {"password": local_password, "username": local_username})
+    else:
+        response = ombi_std_post("api/v2/wizard/config", {"applicationName": "Ombi", "applicationUrl": app_url, "logo": None})
+        response = ombi_std_post("api/v1/Identity/Wizard/", {"password": hostname, "username": hostname, "usePlexAdminAccount": False})
 
     ombi_std_post("api/v1/Identity/Wizard/", {"username": local_username, "password": local_password, "usePlexAdminAccount": False})
     ombi_std_post("api/v1/Settings/Authentication", {
@@ -730,6 +739,89 @@ def prowlarr_add_flaresolverr(prowlarr_instance: darr_instance, validate_ssl: bo
     else:
         raise Exception("Unknown issue adding FlareSolverr\n" + response.text)
 
+### Overseerr methods
+def plex_get_server_id(scheme: str, hostname: str, port: int, validate_ssl: bool=False) -> str:
+    url = f"{scheme}://{hostname}:{str(port)}/identity"
+    response = requests.get(url, verify=validate_ssl)
+
+    xml = ET.fromstring(response.text)
+    machine_id = xml
+    att = machine_id.attrib["machineIdentifier"]
+    return att
+
+def overserr_import_plex_users(overseerr_instance: darr_instance, machine_ids: list[str]) -> bool:
+    url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/user/import-from-plex"
+    response = requests.post(url, verify=overseerr_instance.ssl, headers={"X-Api-Key": overseerr_instance.api_key}, json={"plexIds": [machine_ids]})
+
+    return response.status_code in (200, 201)
+
+def overseerr_configure_plex(overseerr_instance: darr_instance, plex_hostname: str, plex_port: int) -> bool:
+    url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/plex"
+    json_data = {"ip": plex_hostname, "port": plex_port, "useSsl": False}
+    response = requests.post(url, verify=overseerr_instance.ssl, headers={"X-Api-Key": overseerr_instance.api_key}, json=json_data)
+
+    return response.status_code in (200, 201)
+
+def overseerr_add_sonarr_and_radarr(overseerr_instance: darr_instance, sonarr_internal_instance: darr_instance, radarr_internal_instance: darr_instance) -> bool:
+    radarr_url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/radarr"
+    radarr_json = {
+        "name": "radarr",
+        "hostname": radarr_internal_instance.internal_hostname,
+        "port": 7878,
+        "apiKey": radarr_internal_instance.api_key,
+        "useSsl": radarr_internal_instance.ssl,
+        "baseUrl": radarr_internal_instance.path,
+        "activeProfileId": 1,
+        "activeProfileName": "Any",
+        "activeDirectory": "/movies",
+        "is4k": False,
+        "minimumAvailability": "released",
+        "tags": [],
+        "isDefault": True,
+        "syncEnabled": True,
+        "preventSearch": False,
+        "tagRequests": True
+    }
+    response = requests.post(radarr_url, verify=overseerr_instance.ssl, headers={"X-Api-Key": overseerr_instance.api_key}, json=radarr_json)
+    radarr_result = response.status_code in (200, 201)
+
+    sonarr_url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/sonarr"
+    sonarr_json = {
+	  "name": "sonarr",
+	  "hostname": sonarr_internal_instance.hostname,
+	  "port": 8989,
+	  "apiKey": sonarr_internal_instance.api_key,
+	  "useSsl": sonarr_internal_instance.ssl,
+	  "baseUrl": sonarr_internal_instance.path,
+	  "activeProfileId": 1,
+	  "activeLanguageProfileId": 1,
+	  "activeProfileName": "Any",
+	  "activeDirectory": "/tv",
+	  "activeAnimeProfileId": 1,
+	  "activeAnimeLanguageProfileId": 1,
+	  "activeAnimeProfileName": "Any",
+	  "activeAnimeDirectory": "/tv",
+	  "tags": [],
+	  "animeTags": [],
+	  "is4k": False,
+	  "isDefault": True,
+	  "enableSeasonFolders": True,
+	  "syncEnabled": True,
+	  "preventSearch": False,
+	  "tagRequests": True
+	}
+    response = requests.post(sonarr_url, verify=overseerr_instance.ssl, headers={"X-Api-Key": overseerr_instance.api_key}, json=sonarr_json)
+    sonarr_result = response.status_code in (200, 201)
+
+
+def overseerr_set_init_flag(overseerr_instance: darr_instance) -> bool:
+    url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/initialize"
+    response = requests.post(url, headers={"X-Api-Key": overseerr_instance.api_key}, json={"initialized": True})
+
+    return response.status_code in (200, 201)
+
+
+
 
 
         
@@ -912,7 +1004,7 @@ def add_quality_profiles(sonarr_instance: darr_instance, radarr_instance: darr_i
 def configure_all_apps(vars):
 
     traefik_port = ("443" if vars["default_scheme"] == "https" else "80")
-    sonarr, lidarr, radarr, bazarr, readarr, prowlarr_instance, prowlarr_internal_instance, radarr_internal_instance, sonarr_internal_instance = [None] * 9
+    sonarr, lidarr, radarr, bazarr, readarr, overseerr, prowlarr_instance, prowlarr_internal_instance, radarr_internal_instance, sonarr_internal_instance = [None] * 10
 
     
     if customisation_params["url_mode"] == "path":
@@ -921,6 +1013,7 @@ def configure_all_apps(vars):
         radarr = darr_instance("radarr", vars['hostname'], vars['port'], "/radarr", True, True, vars['apikey'], vars['default_scheme'], 7878, 6969, "radarr", "http")
         bazarr = darr_instance("bazarr", vars['hostname'], vars['port'], "/bazarr", True, True, vars['apikey'], vars['default_scheme'], 8989, 6969, "bazarr", "http")
         readarr = darr_instance("readarr", vars['hostname'], vars['port'], "/readarr", True, True, vars['apikey'], vars['default_scheme'], 8787, 6969, "readarr", "http")
+        overseerr = darr_instance("overseerr", vars['hostname'], 5055, "", True, True, vars['overseerr_api'], vars['default_scheme'], 5055, 5055, "overseerr", "http")
         prowlarr_instance = darr_instance("prowlarr", vars['hostname'], vars['port'], "/prowlarr", True, True, vars['apikey'], vars['default_scheme'], 9696, 6969, "prowlarr", "http")
         prowlarr_internal_instance = darr_instance("prowlarr_internal", "prowlarr", 9696, "/prowlarr", False, False, vars['apikey'], "http", 9696, 6969, "prowlarr", "http")
     elif customisation_params["url_mode"] == "domain":
@@ -929,6 +1022,7 @@ def configure_all_apps(vars):
         radarr = darr_instance("radarr", "radarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], vars['default_scheme'], 7878, 6969, "radarr", "http")
         bazarr = darr_instance("bazarr", "bazarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], vars['default_scheme'], 8989, 6969, "bazarr", "http")
         readarr = darr_instance("readarr", "readarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], vars['default_scheme'], 8787, 6969, "readarr", "http")
+        overseerr = darr_instance("overseerr", "overseerr." + vars['hostname'], vars['port'], "", True, True, vars['overseerr_api'], vars['default_scheme'], 5055, 5055, "overseerr", "http")
         prowlarr_instance = darr_instance("prowlarr", "prowlarr." + vars['hostname'], vars['port'], "", True, True, vars['apikey'], vars['default_scheme'], 9696, 6969, "prowlarr", "http")
         prowlarr_internal_instance = darr_instance("prowlarr_internal", "prowlarr", 9696, "", False, False, vars['apikey'], "http", 9696, 6969, "prowlarr", "http")
 
@@ -946,6 +1040,14 @@ def configure_all_apps(vars):
     darr_add_download_client(readarr, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge", api_version="v1")
     darr_add_download_client(prowlarr_instance, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge", api_version="v1")
 
+    plex_sid = plex_get_server_id("http", vars['hostname'], 32400)
+    import_user_success = overserr_import_plex_users(overseerr, plex_sid)
+    overseerr_configure_plex(overseerr, vars["internal_hostname"], 32400)
+    overseerr_add_sonarr_and_radarr(overseerr, sonarr, radarr)
+    overseerr_set_init_flag(overseerr)
+
+
+
     darr_add_root_folder(sonarr, "/tv/", "/tv/")
     darr_add_root_folder(lidarr, "/music/", "/music/", api_version="v1", additional_fields={"defaultMetadataProfileId": "1", "defaultQualityProfileId": "1", "defaultTags": []})
     darr_add_root_folder(radarr, "/movies", "/movies")
@@ -956,18 +1058,6 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
-    ombi = None
-    if customisation_params["url_mode"] == "path":
-        ombi = ombi_instance(vars["hostname"], traefik_port, customisation_params["ombi_path"], vars["apikey"], scheme=vars['default_scheme'])
-    else: 
-        ombi = ombi_instance("ombi." + vars["hostname"], traefik_port, customisation_params["ombi_path"], vars["apikey"], scheme=vars['default_scheme'])
-    if "plex_username" in vars and "plex_password" in vars:
-        ombi_initial_setup(ombi.hostname, traefik_port, customisation_params["ombi_path"], plex_username=vars["plex_username"], plex_password=vars["plex_password"],  api_key=vars["apikey"], scheme=vars["default_scheme"], validate_certificates=False,  local_username=vars["app_username"], local_password=vars["app_password"])
-    else:
-        ombi_initial_setup(ombi.hostname, traefik_port, customisation_params["ombi_path"], api_key=vars["apikey"], scheme=vars["default_scheme"], validate_certificates=False,  local_username=vars["app_username"], local_password=vars["app_password"])
-    ombi_upload_sonarr_profiles(ombi, "sonarr", 8989, True, vars["apikey"], False, customisation_params["sonarr_path"], 4, 1, 1, 1)
-    ombi_upload_radarr_profiles(ombi, "radarr", 7878, vars["apikey"], False, customisation_params["radarr_path"], 4, "/movies")
-    ombi_upload_lidarr_profiles(ombi, "lidarr", 8686, vars["apikey"], False, customisation_params["lidarr_path"], "/music/")
 
 
 
@@ -1038,6 +1128,8 @@ def main():
     parser.add_argument("--plex-password", help="Plex password")
     parser.add_argument("--app-username", help="Username for apps when required")
     parser.add_argument("--app-password", help="Password for apps when required")
+    parser.add_argument("--overseerr-api", help="Overseerr API key")
+    parser.add_argument("--internal-hostname", help="The hostname of the box itself")
     args = vars(parser.parse_args())
 
     configure_all_apps(args)

@@ -29,7 +29,7 @@ colors:
     card-shadow: rgba(0, 0, 0, 0.5)
     link: "#3273dc"
     link-hover: "#2e4053"
-    background-image: "../assets/wallpaper-light.jpeg"
+    background-image: "../assets/light.jpg"
   dark:
     highlight-primary: "#181C3A"
     highlight-secondary: "#181C3A"
@@ -43,7 +43,7 @@ colors:
     card-shadow: rgba(0, 0, 0, 0.5)
     link: "#c1c1c1"
     link-hover: "#fafafa"
-    background-image: "../assets/wallpaper.jpeg"
+    background-image: "../assets/dark.jpg"
 
 
 # Optional navbar
@@ -79,12 +79,12 @@ services:
   - name: "Downloaders"
     icon: "fas fa-cloud"
     items:
-      - name: "Ombi"
-        logo: "assets/icons/ombi.png"
+      - name: "Overseerr"
+        logo: "assets/icons/overseerr.png"
         subtitle: "Browse TV, Movies to download"
         tag: "app"
         keywords: "media tv series movie"
-        url: "/ombi"
+        url: "http://{{ vm_vars.vminfo.hostname }}:5055"
         target: "_blank" # optional html a tag target attribute
       - name: "Sonarr"
         logo: "assets/icons/sonarr.png"
@@ -119,13 +119,6 @@ services:
         tag: "app"
         keywords: "media tv movie subtitles"
         url: "/bazarr"
-        target: "_blank" # optional html a tag target attribute
-      - name: "Jackett"
-        logo: "assets/icons/jackett.png"
-        subtitle: "Helps find downloads for TV shows, movies"
-        tag: "app"
-        keywords: "media tv movie torrent"
-        url: "/jackett"
         target: "_blank" # optional html a tag target attribute
       - name: "Prowlarr"
         logo: "assets/icons/prowlarr.png"

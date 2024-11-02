@@ -12,9 +12,6 @@ local_username: "myappusername"
 local_password: "myapppassword"
 
 
-plex_username: null
-plex_password: null
-
 #homer_theme: default
 # Can be default or sui
 
@@ -23,6 +20,7 @@ tailscale_auth_key: null
 
 
 api_key: "4nnuqufdm909hthay5rnu0fq8mbix36j"
+overseerr_apikey: "MTczMDQ2MjQxMTU0ODMzNGMyY2Q0LTY2ZGEtNDYxYS1hOTA4LWIxMDk1MjFmYzVlOA=="
 
 vminfo:
    hostname: nasinabox
