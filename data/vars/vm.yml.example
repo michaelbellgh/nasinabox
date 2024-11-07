@@ -1,23 +1,6 @@
-creds: {guest_pass: mynasinaboxuser, guest_user: mynasinaboxpassword}
+creds: {guest_pass: nasinabox, guest_user: nasinabox}
 
-nas: { open_subtitles_username: "myusername",
- open_subtitles_password: "mypassword",
- storage_path: "/mnt/Storage/",
- nas_app_username: "nasinabox",
- nas_app_password: "nasinabox",
- default_to_ssl: False
-}
-
-local_username: "myappusername"
-local_password: "myapppassword"
-
-
-#homer_theme: default
-# Can be default or sui
-
-tailscale_auth_key: null
-#Optional support for joining device to tailscale network
-
+nas: { open_subtitles_username: "myusername", open_subtitles_password: "mypassword",  storage_path: "/mnt/Storage/",  nas_app_username: "nasinabox", nas_app_password: "nasinabox"}
 
 api_key: "4nnuqufdm909hthay5rnu0fq8mbix36j"
 overseerr_apikey: "MTczMDQ2MjQxMTU0ODMzNGMyY2Q0LTY2ZGEtNDYxYS1hOTA4LWIxMDk1MjFmYzVlOA=="
@@ -25,12 +8,7 @@ overseerr_apikey: "MTczMDQ2MjQxMTU0ODMzNGMyY2Q0LTY2ZGEtNDYxYS1hOTA4LWIxMDk1MjFmY
 vminfo:
    hostname: nasinabox
 
+tailscale_auth_key: ""
+
+use_custom_netplan: False
 zfs_drives: []
-#If you want to make the storage drive a ZFS pool, specify a list of drives e.g.
-#zfs_drives: ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"]
-
-#Type of ZFS raid if used. Raidz1 is the default (like RAID5, allows 1 disk to fail)
-zfs_type: "raidz1"
-
-
-  

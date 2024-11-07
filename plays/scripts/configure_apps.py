@@ -1,6 +1,7 @@
 import threading
 import requests, json, argparse, os, json, glob
 import urllib3
+from urllib.parse import urlencode
 
 import xml.etree.ElementTree as ET
 
@@ -15,15 +16,20 @@ customisation_params = {
     "sonarr_path": "/sonarr",
     "lidarr_path": "/lidarr",
     "radarr_path": "/radarr",
-    "torrent_path": "/deluge",
+    "torrent_path": "/flood",
+    "download_diretory": "/downloads",
     "ombi_path": "/ombi",
     "validate_ssl": False,
     "preferr_dv": False
 
 }
 
-def api_request_darr(hostname: str, port: int, path: str, api_key: str, json: dict, scheme: str="https", method: str="POST", verify_certificate=False):
-    uri = scheme + "://" + hostname + ":" + str(port) + path + "?apikey=" + api_key
+def api_request_darr(hostname: str, port: int, path: str, api_key: str, json: dict=None, query_dict: dict = None, scheme: str="http", method: str="POST", verify_certificate=False):
+    uri = scheme + "://" + hostname + ":" + str(port) + path
+    if query_dict is not None and isinstance(query_dict, dict) and len(query_dict) > 0:
+        uri += "?" + urlencode(query_dict.update({"apikey": api_key}))
+    else:
+        uri += "?" + urlencode({"apikey": api_key})
 
     response = None
     if method == "POST":
@@ -36,7 +42,11 @@ def api_request_darr(hostname: str, port: int, path: str, api_key: str, json: di
             response = requests.get(uri, json=json, verify=verify_certificate)
         else:
             response = requests.get(uri, verify=verify_certificate)
-    
+    elif method == "PUT":
+        if json is not None and isinstance(json, dict):
+            response = requests.put(uri, json=json, verify=verify_certificate)
+        else:
+            raise Exception("Need a JSON body for a PUT request to  " + uri)  
     return response
 
 def add_torznab_indexer(hostname: str, port: int, base_uri_client: str, base_uri_indexer: str ,name: str, api_path: str, categories: list, api_key: str, scheme: str="https", custom_fields: dict=None, indexer_api_path: str="/api/v3/indexer", info_link: str=None):
@@ -247,30 +257,53 @@ class darr_instance:
 def darr_add_root_folder(darr : darr_instance, name, path, api_version="v3", additional_fields={}):
     fields = {"path" : path, "name": name}
     fields.update(additional_fields)
-    api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/rootFolder", darr.api_key, fields, darr.scheme)
+    api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/rootFolder", darr.api_key, json=fields, scheme=darr.scheme)
 
-def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: str, torrent_port: int, torrent_path: str, torrent_username: str, torrent_password: str, implementation: str="Transmission", api_version="v3"):
-    body = {"configContract" : implementation + "Settings", "enable": True, "implementation" : implementation, "implementationName" : implementation, "name" : name, "priority" : 1, "protocol" : "torrent", "tags" : []}
+def darr_add_download_client(darr: darr_instance, name: str, torrent_hostname: str, torrent_port: int, torrent_path: str, torrent_username: str, torrent_password: str, implementation: str="Transmission", api_version="v3", tags=[]):
+    body = {"configContract" : implementation + "Settings", "enable": True, "implementation" : implementation, "implementationName" : implementation, "name" : name, "priority" : 1, "protocol" : "torrent", "tags" : tags}
+
+    download_client_response = api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/downloadclient", darr.api_key, scheme=darr.scheme, method="GET")
+    client_list_json = download_client_response.json()
+
+    names_to_id = {}
+    for d in client_list_json:
+        names_to_id[d["name"]] = d["id"]
+
+    key = ""
+
+    body.update({"removeCompletedDownloads": True, "removeFailedDownloads": True})
+
     fields = []
     fields.append({"name" : "host", "value" : torrent_hostname})
     fields.append({"name" : "port", "value" : torrent_port})
     fields.append({"name" : "urlBase"})
+    fields.append({"name": "destination",  "value": torrent_path})
     if torrent_username is not None:
         fields.append({"name" : "username", "value" : torrent_username})
     if torrent_password is not None:
         fields.append({"name" : "password", "value" : torrent_password})
     #Needed for Deluge
-    fields.append({"name" : "tvCategory", "value" : ""})
-    fields.append({"name" : "tvDirectory"})
-    fields.append({"name" : "tvImportedCategory"})
-    fields.append({"name" : "recentTvPriority", "value" : 0})
-    fields.append({"name" : "olderTvPriority", "value" : 0})
-    fields.append({"name" : "addPaused", "value" : False})
+    #fields.append({"name" : "tvCategory", "value" : ""})
+    #fields.append({"name" : "tvDirectory"})
+    #fields.append({"name" : "tvImportedCategory"})
+    #fields.append({"name" : "recentTvPriority", "value" : 0})
+    #fields.append({"name" : "olderTvPriority", "value" : 0})
+    fields.append({"name" : "startOnAdd", "value" : True})
     fields.append({"name" : "useSsl", "value" : False})
+
+    if implementation.lower() == "qbittorrent":
+        fields.append({"name": "initialState", "value": 0})
 
     body.update({'fields' : fields})
 
-    api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/downloadclient", darr.api_key, body, darr.scheme, "POST")
+    response = api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/downloadclient", darr.api_key, json=body,  scheme=darr.scheme, method="POST")
+
+    if body["name"] in names_to_id:
+        key = names_to_id[body["name"]]
+        response = api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/downloadclient/" + str(key), darr.api_key, json=body, scheme=darr.scheme, method="PUT")
+
+    if "Should be unique" in response.text:
+        response = api_request_darr(darr.hostname, darr.port, darr.path + "/api/" + api_version + "/downloadclient/", darr.api_key, json=body, scheme=darr.scheme, method="PUT")
 
 
 def darr_get_tag_dict(darr: darr_instance, validate_cert: bool):
@@ -1003,7 +1036,6 @@ def add_quality_profiles(sonarr_instance: darr_instance, radarr_instance: darr_i
 
 def configure_all_apps(vars):
 
-    traefik_port = ("443" if vars["default_scheme"] == "https" else "80")
     sonarr, lidarr, radarr, bazarr, readarr, overseerr, prowlarr_instance, prowlarr_internal_instance, radarr_internal_instance, sonarr_internal_instance = [None] * 10
 
     
@@ -1032,13 +1064,14 @@ def configure_all_apps(vars):
     darr_set_authentication(sonarr, "Sonarr", customisation_params["instance_name"], customisation_params["instance_name"], "none", api_version="v3")
     darr_set_authentication(lidarr, "Lidarr", customisation_params["instance_name"], customisation_params["instance_name"], "none", api_version="v1")
     darr_set_authentication(radarr, "Radarr", customisation_params["instance_name"], customisation_params["instance_name"], "none", api_version="v3")
+    darr_set_authentication(readarr, "Readarr", customisation_params["instance_name"], customisation_params["instance_name"], "none", api_version="v1")
 
     
-    darr_add_download_client(sonarr, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge")
-    darr_add_download_client(lidarr, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge", api_version="v1")
-    darr_add_download_client(radarr, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge")
-    darr_add_download_client(readarr, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge", api_version="v1")
-    darr_add_download_client(prowlarr_instance, "Deluge", "deluge", 8112, customisation_params["torrent_path"], None ,"deluge", implementation="Deluge", api_version="v1")
+    darr_add_download_client(sonarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_diretory"] + "/tv", "admin" ,"admin", implementation="QBittorrent")
+    darr_add_download_client(lidarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_diretory"] + "/music", "admin" ,"admin", implementation="QBittorrent", api_version="v1")
+    darr_add_download_client(radarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_diretory"] + "/movies", "admin" ,"admin", implementation="QBittorrent")
+    darr_add_download_client(readarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_diretory"] + "/books", "admin" ,"admin", implementation="QBittorrent", api_version="v1")
+    darr_add_download_client(prowlarr_instance, "qBittorrent", "qbittorrent", 8088, customisation_params["download_diretory"], None ,"admin", implementation="QBittorrent", api_version="v1")
 
     plex_sid = plex_get_server_id("http", vars['hostname'], 32400)
     import_user_success = overserr_import_plex_users(overseerr, plex_sid)
@@ -1057,6 +1090,7 @@ def configure_all_apps(vars):
     bazarr_configure_sonarr_provider(bazarr, sonarr)
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
+
 
 
 

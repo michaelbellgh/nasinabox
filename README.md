@@ -65,7 +65,7 @@ This project only has custom ansible playbooks and python configuration scripts 
 - Lidarr - Music Downloader (https://lidarr.audio/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/lidarr)
 - Readarr - Book Downloader (https://readarr.com/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/readarr)
 - Homer - Dashboard (https://github.com/bastienwirtz/homer) running on docker container by LinuxServer (https://hub.docker.com/r/b4bz/homer)
-- Deluge - Torrent client (https://dev.deluge-torrent.org/wiki/Download) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/deluge)
+- qBittorrent - Torrent client (https://www.qbittorrent.org/) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/qbittorrent)
 - Traefik - Reverse Proxy (https://traefik.io/) running on official docker container (https://hub.docker.com/_/traefik)
 - Jackett - Torznab torrent indexer (https://github.com/Jackett/Jackett) running on docker container by LinuxServer (https://hub.docker.com/r/linuxserver/jackett)
 - Samba - SMB server (https://www.samba.org/) running on docker container by dperson (https://hub.docker.com/r/dperson/samba)
@@ -78,6 +78,7 @@ The exception to this is Ombi and Plex, as they require manual configuration wit
 
 ## SSL Certificate Warning
 By default, the ansible playbook will generate a new self signed cert.
+It will use HTTP by default, so this should not be needed
 
 You can replace this with your own certificate (cn = hostname.local, SAN = DNS: hostname.local)
 

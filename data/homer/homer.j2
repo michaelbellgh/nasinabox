@@ -139,10 +139,10 @@ services:
   - name: "Torrents"
     icon: "fas fa-cloud"
     items:
-      - name: "Deluge"
-        logo: "assets/icons/deluge.png"
-        subtitle: "Deluge"
+      - name: "qBittorent"
+        logo: "assets/icons/qbittorrent.png"
+        subtitle: "Torrent client"
         tag: "app"
         keywords: "plex media movie tv"
-        url: "/deluge"
+        url: "http://{{ vm_vars.vminfo.hostname }}.local:8088"
         target: "_blank" # optional html a tag target attribute
