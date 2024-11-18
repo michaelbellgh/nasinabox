@@ -63,7 +63,6 @@
        - { name: "net.ipv6.conf.all.autoconf", value: 0}
        - { name: "net.ipv6.conf.all.accept_ra", value: 0}
        
-
     - name: Set hostname
       ansible.builtin.hostname:
         name: "{{ vm_vars.vminfo.hostname }}"
@@ -81,13 +80,12 @@
           ff00::0 ip6-mcastprefix
           ff02::1 ip6-allnodes
           ff02::2 ip6-allrouters
-    
     - name: Remove default netplan config
       file:
         path: "/etc/netplan/00-installer-config.yaml"
         state: absent
-      when: "vm_vars.use_custom_netplan"
-
+      when: "'use_custom_netplan' in vm_vars and vm_vars['use_custom_netplan'] | bool"
+      
     - name: Install netplan configuration
       copy:
         dest: "/etc/netplan/custom.yaml"
@@ -245,7 +243,7 @@
 
     - name: Set Caddy default port (if ssl)
       set_fact: 
-        caddy_default_port: "443"
+        caddy_default_port: "80"
         default_scheme: "http"
       when: vm_vars.nas.default_to_ssl is defined and vm_vars.nas.default_to_ssl
       tags: ["test"]
@@ -277,8 +275,6 @@
         src: ../data/caddy/sites.j2
         dest: /home/docker/docker_data/caddy/config/sites.json
         force: yes
-
-
       vars:
         apps:
         - {name: "sonarr", dsts: ["/sonarr*"], dial: "sonarr:8989" }
@@ -662,7 +658,7 @@
     - name: Run caddy
       docker_container:
         name: caddy
-        published_ports: ["2019:2019", "2021:2021", "443:443", "80:80"]
+        published_ports: ["2019:2019", "443:443", "80:80"]
 #        recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_readarr.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
         image: "caddy:latest"
         restart_policy: always
@@ -692,19 +688,14 @@
 
     - name: Stop all docker containers
       shell: "docker kill $(docker ps -q)"
-    
+      
     - name: Get hashed password for qBittorent
       script: scripts/gen_qb_hash.py {{ vm_vars.nas.nas_app_password }}
       register: qb_hash_output
-
+      
     - set_fact:
         qb_hash: "{{ qb_hash_output.stdout | trim }}"
-
-    - debug:
-        msg: "{{ qb_hash }}" 
-
-
-
+        
     - name: Template qBittorrent settings
       template:
         src: ../data/qbittorrent/qbittorrent.j2
@@ -740,9 +731,7 @@
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/radarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/readarr/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/prowlarr/config.xml"}
-        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/prowlarr/config.xml"}
         - { regexp: 'apikey:.+', line: "apikey: {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.yaml"}
-
       register: api_change_output
 
 
@@ -794,8 +783,6 @@
         dest: /home/docker/docker_data/overseerr/config/settings.json
         mode: '0777'
       vars: { plex_ip: "{{ ansible_hostname }}.local"}
-
-
     - name: Set homer permissions
       file:
         path: /home/docker/docker_data/homer/
