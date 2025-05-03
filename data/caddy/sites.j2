@@ -39,10 +39,15 @@
 			"listen": [":80"],
 			"routes": [ {% for app in apps %}
 				{
-				"match": 
-				[{
-					"path": [{% for path in app.dsts %}"{{ path }}"{% if not loop.last %},{% endif %}{% endfor %}]
-				}],
+				{% if app.path is defined %}
+				"match": [
+					{
+						"path_regexp":
+					{
+						"pattern": "{{ app.path }}"
+					}
+					}
+				],{% endif %}
 				"handle": [
 					{
 					"handler": "reverse_proxy",

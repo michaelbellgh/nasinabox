@@ -1,12 +1,15 @@
 ---
  - name: Configure NAS (implementation stage)
    gather_facts: false
-   hosts: nas
+   hosts: all
    become: yes
    become_method: sudo
    tasks:
 
 
+    - name: Show first IP address from proxmox plugin data
+      debug:
+        msg: "{{ hostvars }}"
     - name: Load VM variables
       include_vars:
         file: ../data/vars/vm.yml
@@ -41,17 +44,27 @@
         line: "{{ item.line }}"
       become: yes
       with_items:
-       - { path: "/etc/gai.conf", line: "precedence ::ffff:0:0/96  100" }
-       - { path: "/etc/sysctl.conf", line: "net.core.rmem_max = 4194304" }
-       - { path: "/etc/sysctl.conf", line: "net.core.wmem_max = 1048576" }
-       - { path: "/etc/sysctl.conf", line: "fs.file-max = 10000000" }
-       - { path: "/etc/security/limits.conf", line: "root   soft    nofile    10000000"}
-       - { path: "/etc/security/limits.conf", line: "root   hard    nofile    10000000"}
-       - { path: "/etc/sysctl.conf", line: "net.ipv6.conf.all.disable_ipv6 = 1"}
-       - { path: "/etc/sysctl.conf", line: "net.ipv6.conf.default.disable_ipv6 = 1"}
-       - { path: "/etc/sysctl.conf", line: "net.ipv6.conf.lo.disable_ipv6 = 1"}
+       - { path: "/etc/gai.conf", regexp: '^([\s#])?precedence\N+', line: "precedence ::ffff:0:0/96  100" }
+       - { path: "/etc/security/limits.conf", regexp: '^([\s#])?root\s+soft\s+nofile\s+', line: "root   soft    nofile    10000000"}
+       - { path: "/etc/security/limits.conf", regexp: '^([\s#])?root\s+hard\s+nofile\s+', line: "root   hard    nofile    10000000"}
       register: set_system_settings
 
+    - name: Set SYSCTL settings
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        sysctl_set: true
+        reload: true
+      with_items:
+       - { name: "net.core.rmem_max", value: 4194304}
+       - { name: "net.core.wmem_max", value: 1048576}
+       - { name: "fs.file-max", value: 10000000}
+       - { name: "net.ipv6.conf.all.disable_ipv6", value: 1}
+       - { name: "net.ipv6.conf.default.disable_ipv6", value: 1}
+       - { name: "net.ipv6.conf.all.disable_ipv6", value: 1}
+       - { name: "net.ipv6.conf.all.autoconf", value: 0}
+       - { name: "net.ipv6.conf.all.accept_ra", value: 0}
     - name: Set hostname
       ansible.builtin.hostname:
         name: "{{ vm_vars.vminfo.hostname }}"
@@ -69,23 +82,17 @@
           ff00::0 ip6-mcastprefix
           ff02::1 ip6-allnodes
           ff02::2 ip6-allrouters
-    
-    - name: Set system settings (apply)
-      command: "sysctl --system"
-      when: set_system_settings.changed
-    
     - name: Remove default netplan config
       file:
         path: "/etc/netplan/00-installer-config.yaml"
         state: absent
-      when: vm_vars.use_custom_netplan
-
+      when: "'use_custom_netplan' in vm_vars and vm_vars['use_custom_netplan'] | bool"
 
     - name: Install netplan configuration
       copy:
         dest: "/etc/netplan/custom.yaml"
         src: "../data/netplan/custom.yaml"
-      when: "vm_vars.use_custom_netplan"
+      when: "'use_custom_netplan' in vm_vars and vm_vars['use_custom_netplan'] | bool"
       register: netplan_setup
 
     - name: Netplan apply
@@ -230,14 +237,16 @@
 
     - name: Copy custom root CA's
       copy:
-        src: "../data/certs/"
+        src: "{{ item }}"
         dest: "/usr/local/share/ca-certificates/"
+      with_fileglob:
+       - "../data/certs/*.crt"
       
 
     - name: Set Caddy default port (if ssl)
       set_fact: 
-        caddy_default_port: "443"
-        default_scheme: "https"
+        caddy_default_port: "80"
+        default_scheme: "http"
       when: vm_vars.nas.default_to_ssl is defined and vm_vars.nas.default_to_ssl
       tags: ["test"]
 
@@ -260,6 +269,8 @@
       become: yes
       with_items:
        - { src: "../data/homer/icons/", dest: "/home/docker/docker_data/homer/icons/", force: yes}
+       - { src: "../data/homer/light.jpg" , dest: "/home/docker/docker_data/homer/light.jpg", force: yes}
+       - { src: "../data/homer/dark.jpg" , dest: "/home/docker/docker_data/homer/dark.jpg", force: yes}
 
     - name: Template sites
       template:
@@ -268,16 +279,14 @@
         force: yes
       vars:
         apps:
-        - {name: "sonarr", dsts: ["/sonarr*"], dial: "sonarr:8989" }
-        - {name: "radarr", dsts: ["/radarr*"], dial: "radarr:7878" }
-        - {name: "ombi", dsts: ["/ombi*"], dial: "ombi:3579" }
-        - {name: "lidarr", dsts: ["/lidarr*"], dial: "lidarr:8686" }
-        - {name: "bazarr", dsts: ["/bazarr*"], dial: "bazarr:6767" }
-        - {name: "readarr", dsts: ["/readarr*"], dial: "readarr:8787" }
-        - {name: "prowlarr", dsts: ["/prowlarr*"], dial: "prowlarr:9696" }
-        - {name: "deluge", dsts: ["/deluge*"], dial: "deluge:8112", stripprefix: "/deluge" }
-        - {name: "homer", dsts: ["/*"], dial: "homer:8080" }
-        - {name: "deemix", dsts: ["/deemix*"], dial: "deemix:6595"}
+        - {name: "sonarr", path: "^\/sonarr(\/.+)?", dial: "sonarr:8989" }
+        - {name: "radarr", path: "^\/radarr(\/.+)?", dial: "radarr:7878" }
+        - {name: "lidarr", path: "^\/lidarr(\/.+)?", dial: "lidarr:8686" }
+        - {name: "bazarr", path: "^\/bazarr(\/.+)?", dial: "bazarr:6767" }
+        - {name: "readarr", path: "^\/readarr(\/.+)?", dial: "readarr:8787" }
+        - {name: "prowlarr", path: "^\/prowlarr(\/.+)?", dial: "prowlarr:9696" }
+        - {name: "homer", dial: "homer:8080" }
+        - {name: "deemix", path: "^\/deemix(\/.+)?", dial: "deemix:6595"}
       
       
     - name: Enable unattended-upgrades
@@ -294,6 +303,7 @@
     - name: create internal docker network
       community.general.docker_network:
         name: docker
+        enable_ipv6: true
 
     - name: Add groups
       group:
@@ -314,41 +324,45 @@
     - name: Set ZFS variables
       set_fact:
         single_disk: "{{ vm_vars.zfs_drives | length == 0 }}"
+      when: vm_vars.zfs_drives is defined
 
     - name: Make mount point
       file: 
-        path: "{{ vm_vars.nas.storage_path }}"
+        path: "{{ vm_vars.nas.storage_path | default('/mnt/Storage/') }}"
         state: directory
-      when: single_disk
+      when: single_disk is not defined
 
     - name: Get zpool info
       command: "zfs list"
       register: zfacts
-      when: not single_disk 
+      when: single_disk is not defined or not single_disk 
 
     - name: Try import NAS pool
       command: "zpool import NAS -f"
-      when: '"{{ vm_vars.nas.storage_path }}" not in zfacts.stdout and not single_disk'
+      when: '"{{ vm_vars.nas.storage_path | default("/mnt/Storage") }}" not in zfacts.stdout and not single_disk'
       register: try_import
       ignore_errors: yes
                                                                                      
     - name: Get ZFS pools
       command: "zfs list"
       register: zfs_pools
-      when: not single_disk               
+      when: single_disk is not defined or single_disk is not defined or not single_disk            
                                                                                      
     - name: Make ZFS pool
-      command: "zpool create NAS {{ vm_vars.zfs_type }} {{ vm_vars.zfs_drives | join(' ') }}"
-      when: not single_disk and 'NAS' not in zfs_pools.stdout                       
+      command: "zpool create NAS {{ vm_vars.zfs_type }} {{ vm_vars.zfs_drives | join(' ') | default }}"
+      when: single_disk is not defined or not single_disk and 'NAS' not in zfs_pools.stdout                       
 
     - name: Make ZFS pool (force)
       command: "zpool create NAS {{ vm_vars.zfs_type }} {{ zfs_list }} -f"
-      when: not single_disk and ('NAS' not in zfs_pools.stdout and force is defined)
+      when: single_disk is not defined or single_disk is not defined or not single_disk and ('NAS' not in zfs_pools.stdout and force is defined)
+
+
 
 
     - name: Mount ZFS pool
       command: "zfs set mountpoint={{ vm_vars.nas.storage_path }} NAS"
-      when: vm_vars.zfs_drives is defined and not single_disk
+      when: single_disk is not defined or vm_vars.zfs_drives is defined and not single_disk
+      ignore_errors: yes
 
     - name: Fallback to fix mount module issue
       command: "mount {{ item }}"
@@ -359,7 +373,7 @@
 
     - name: Set permissions on Storage
       file:
-        path: "{{ vm_vars.nas.storage_path }}"
+        path: "{{ vm_vars.nas.storage_path | default ('/mnt/Storage') }}"
         mode: '644'
         state: directory
       become: yes
@@ -386,6 +400,33 @@
        - {src: /tmp/Homer-Theme/assets/manifest.json, dest: /home/docker/docker_data/homer/manifest.json }
        - {src: /tmp/Homer-Theme/assets/fonts, dest: /home/docker/docker_data/homer/fonts}
 
+
+    - name: Get running containers
+      docker_host_info:
+        containers: yes
+      register: docker_info
+
+    - name: Stop running containers (for backup)
+      docker_container:
+        name: "{{ item }}"
+        state: stopped
+        comparisons: {"*": "ignore"}
+      loop: "{{ docker_info.containers | map(attribute='Id') }}"
+      when: backup is defined and backup == 'yes'
+
+    - name: Backup the specified directory recursively using ZIP
+      command: "zip -r /tmp/docker_data.zip /home/docker/docker_data/"
+      when: backup is defined and backup == 'yes'
+      ignore_errors: yes
+
+    - name: Copy the backup to the Ansible host
+      fetch:
+        src: /tmp/docker_data.zip
+        dest: docker_backup.zip
+        flat: yes
+      when: backup is defined and backup == 'yes'
+
+
     - name: Set permissions on Docker Data
       file:
         path: /home/docker/docker_data
@@ -407,26 +448,25 @@
         state: absent
       when: wipe is defined
 
-    - name: Start Deluge
+    - name: Start qBittorrent
       docker_container:
-        name: deluge
-        image: linuxserver/deluge:2.1.1-r3-ls179
+        name: qbittorrent
+        image: lscr.io/linuxserver/qbittorrent:latest
         env: 
-         TZ: "Australia/Melbourne"
-         PUID: "1001"
-         PGID: "1001"
+          PUID: "1001"
+          PGID: "1001"
+          TZ: Etc/UTC
+          WEBUI_PORT: "8088"
+          TORRENTING_PORT: "6881"
         networks:
          - name: docker
-        published_ports: ["6881:6881", "6881:6881/udp"]
+        published_ports: ["8088:8088", "6881:6881", "6881:6881/udp"]
         volumes:
-        - /home/docker/docker_data/deluge/config:/config
-        - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
-        - "{{ vm_vars.nas.storage_path }}Downloads/watch:/watch"
-        - "{{ vm_vars.nas.storage_path }}Downloads/incomplete:/incomplete"
         - /var/www/ssl/:/ssl
+        - /home/docker/docker_data/qbittorent:/config
+        - "{{ vm_vars.nas.storage_path }}Downloads:/downloads"
         restart_policy: always
-
-      register: docker_deluge
+      register: docker_qbittorrent
 
     - name: Start plex
       docker_container:
@@ -503,29 +543,29 @@
 
       register: docker_sonarr
 
-    - name: Start ombi
+    - name: Start overseerr
       docker_container:
-        name: ombi
-        image: linuxserver/ombi
+        name: overseerr
+        image: linuxserver/overseerr:latest
+        published_ports: ["5055:5055"]
         env: 
          TZ: Australia/Melbourne
-         BASE_URL: "/ombi"
          PUID: "1001"
          PGID: "1001"
         networks:
-        - name: "docker"
+         - name: "docker"
         volumes:
-        - /home/docker/docker_data/ombi/config:/config
+        - /home/docker/docker_data/overseerr/config:/config
         - "/var/www/ssl/:/ssl"
         restart_policy: always
 
-      register: docker_ombi
+      register: docker_overseer
 
 
     - name: Start bazarr
       docker_container:
         name: bazarr
-        image: linuxserver/bazarr
+        image: linuxserver/bazarr:development
         env: 
          TZ: Australia/Melbourne
          PUID: "1001"
@@ -677,80 +717,20 @@
 
     - name: Stop all docker containers
       shell: "docker kill $(docker ps -q)"
-
-
-    - name: Check if deluge web.conf is missing
-      stat: 
-        path: /home/docker/docker_data/deluge/config/web.conf
-      register: deluge_web_conf
-
-    
-    - name: Set deluge webconf fact
-      set_fact:
-        deluge_web_conf_contents: |
-          {
-              "file": 2,
-              "format": 1
-          }{
-              "base": "/deluge",
-              "cert": "ssl/daemon.cert",
-              "default_daemon": "",
-              "enabled_plugins": [
-                  "Label",
-                  "Execute"
-              ],
-              "first_login": false,
-              "https": false,
-              "interface": "0.0.0.0",
-              "language": "",
-              "pkey": "ssl/daemon.pkey",
-              "port": 8112,
-              "pwd_salt": "c26ab3bbd8b137f99cd83c2c1c0963bcc1a35cad",
-              "pwd_sha1": "2ce1a410bcdcc53064129b6d950f2e9fee4edc1e",
-              "session_timeout": 3600,
-              "show_session_speed": false,
-              "show_sidebar": true,
-              "sidebar_multiple_filters": true,
-              "sidebar_show_zero": false,
-              "theme": "gray"
-          }
-      when: not deluge_web_conf.stat.exists
-
-    - name: Set deluge webconf
-      copy:
-        dest: "/home/docker/docker_data/deluge/config/web.conf"
-        content: "{{ deluge_web_conf_contents }}"
-      become: yes
-      when: not deluge_web_conf.stat.exists
-
-
-    - name: Set other app parameters
-      replace:
-        regexp: "{{ item.regexp }}"
-        replace: "{{ item.line }}"
-        path: "{{ item.path }}"
-      with_items:
-       - { regexp: '"/root/Downloads"', line: '"/downloads"', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"max_connections_global\"\s*\:\s*\d+', line: '"max_connections_global": 5000', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"max_active_limit\"\s*\:\s*\d+', line: '"max_active_limit": 30', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"max_active_limit\"\s*\:\s*\d+', line: '"max_active_limit": 30', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"max_active_downloading\"\s*\:\s*\d+', line: '"max_active_downloading": 30', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"share_ratio_limit\"\s*\:\s*[\d\.]+', line: '"share_ratio_limit": 2.0', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"stop_seed_at_ratio\"\s*\:\s*\d+', line: '"stop_seed_at_ratio": true', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"stop_seed_ratio\"\s*\:\s*[\d\.]+', line: '"stop_seed_ratio": 2.0', path: "/home/docker/docker_data/deluge/config/core.conf"}
-       - { regexp: '\"enabled_plugins\"[:\s]+\[.*]', line: '"enabled_plugins": ["Label", "Execute"]', path: "/home/docker/docker_data/deluge/config/core.conf"}
       
-
-    - name: Start deluge
-      docker_container:
-        name: deluge
-        state: started
-        restart: yes
-        comparisons: { "*": "ignore" }
-      become: yes
-      when: not deluge_web_conf.stat.exists
-
-
+    - name: Get hashed password for qBittorent
+      script: scripts/gen_qb_hash.py {{ vm_vars.nas.nas_app_password | default ('nasinabox') }}
+      register: qb_hash_output
+      
+    - set_fact:
+        qb_hash: "{{ qb_hash_output.stdout | trim }}"
+        
+    - name: Template qBittorrent settings
+      template:
+        src: ../data/qbittorrent/qbittorrent.j2
+        dest: /home/docker/docker_data/qbittorent/qBittorrent/qBittorrent.conf
+        force: yes
+        mode: '0777'
 
     - name: Set URL base on configs
       replace:
@@ -764,13 +744,12 @@
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/radarr</UrlBase>", path: "/home/docker/docker_data/radarr/config/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/readarr</UrlBase>", path: "/home/docker/docker_data/readarr/config.xml"}
        - { regexp: "base_url:.+", line: "base_url: '/bazarr'", path: "/home/docker/docker_data/bazarr/config/config/config.yaml"}
-       - { regexp: '"base":\s+".+"', line: '  "base" : "/deluge"', path: "/home/docker/docker_data/deluge/config/web.conf"}
       register: url_base_output
 
 
 
     - name: Set API Key to single key
-      replace:
+      ansible.builtin.replace:
         regexp: "{{ item.regexp }}"
         path: "{{ item.path }}"
         replace: "{{ item.line }}"
@@ -784,48 +763,6 @@
         - { regexp: 'apikey:.+', line: "apikey: {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.yaml"}
       register: api_change_output
 
-    - name: Set Ombi API key (script creation)
-      copy: 
-        dest: "/tmp/ombi.sql"
-        content: |
-          update GlobalSettings set Content = '{"BaseUrl":"/ombi","CollectAnalyticData":true,"Wizard":true,"ApiKey":"{{ vm_vars.api_key }}","DoNotSendNotificationsForAutoApprove":false,"HideRequestsUsers":false,"DisableHealthChecks":false,"DefaultLanguageCode":"en","AutoDeleteAvailableRequests":false,"AutoDeleteAfterDays":0,"Branch":0,"HasMigratedOldTvDbData":true,"Set":false,"Id":1}' where Id = 1;
-        mode: 0777
-
-    - name: Set Ombi API key (insert stage)
-      shell : "cat /tmp/ombi.sql |sqlite3 /home/docker/docker_data/ombi/config/OmbiSettings.db"
-
-    - name: Generate Deluge web.conf
-      set_fact:
-        deluge_web_conf_content: '
-        {
-    "file": 2,
-    "format": 1
-}{
-      "base" : "/deluge",
-    "cert": "ssl/daemon.cert",
-    "default_daemon": "",
-    "enabled_plugins": [],
-    "first_login": false,
-    "https": false,
-    "interface": "0.0.0.0",
-    "language": "",
-    "pkey": "ssl/daemon.pkey",
-    "port": 8112,
-    "pwd_salt": "c26ab3bbd8b137f99cd83c2c1c0963bcc1a35cad",
-    "pwd_sha1": "2ce1a410bcdcc53064129b6d950f2e9fee4edc1e",
-    "session_timeout": 3600,
-    "show_session_speed": false,
-    "show_sidebar": true,
-    "sidebar_multiple_filters": true,
-    "sidebar_show_zero": false,
-    "theme": "gray"
-}'
-
-    - name: Copy deluge web.conf
-      copy:
-        content: "{{ deluge_web_conf_content }}"
-        dest: /home/docker/docker_data/deluge/config/web.conf
-        force: yes
 
     - name: Get host info
       community.docker.docker_host_info:
@@ -842,6 +779,8 @@
         comparisons: {"*": "ignore"}
         restart: yes
       loop: "{{ docker_info.containers | map(attribute='Id') }}"
+      delay: 15
+      retries: 3
       when: url_base_output.changed or api_change_output.changed
     
 
@@ -851,6 +790,30 @@
         dest: /home/docker/docker_data/homer/config.yml
         mode: '0777'
 
+    - name: Query Plex API for machine ID
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:32400/identity"
+        method: GET
+        return_content: yes
+      register: plex_response
+      failed_when: "'machineIdentifier' not in plex_response.content"
+      retries: 5
+      delay: 10
+
+    - name: Parse machine ID from response
+      set_fact:
+        plex_machine_id: "{{ plex_response.content | regex_search('MachineIdentifier=\"([^\"]+)\"', '\\1') }}"
+
+    - name: Debug Plex machine ID
+      debug:
+        msg: "Plex Machine ID: {{ plex_machine_id }}"
+
+    - name: Template Overseerr dashboard
+      template:
+        src: ../data/overseerr/settings.j2
+        dest: /home/docker/docker_data/overseerr/config/settings.json
+        mode: '0777'
+      vars: { plex_ip: "{{ ansible_hostname }}.local"}
     - name: Set homer permissions
       file:
         path: /home/docker/docker_data/homer/
@@ -928,14 +891,31 @@
       with_items:
        - {key: "--open-subtitles-username", value: "{{ vm_vars.nas.open_subtitles_username | default(None) | quote or omit }}"}
        - {key: "--open-subtitles-password", value: "{{ vm_vars.nas.open_subtitles_password | default(None) | quote or omit }}"}
-       - {key: "--plex-username", value: "{{ vm_vars.plex_username | quote | default (omit) }}"}
-       - {key: "--plex-password", value: "{{ vm_vars.plex_password | quote | default (omit) }}"}
-       - {key: "--app-username", value: "{{ vm_vars.local_username | quote | default (omit) }}"}
-       - {key: "--app-password", value: "{{ vm_vars.local_password | quote | default (omit) }}"}
+       - {key: "--plex-username", value: "{{ vm_vars.plex_username | default(None) | quote or omit }}"}
+       - {key: "--plex-password", value: "{{ vm_vars.plex_password | default(None) | quote or omit }}"}
+       - {key: "--app-username", value: "{{ vm_vars.nas_app_username | default(vm_vars.vminfo.hostname) | quote or omit }}"}
+       - {key: "--app-password", value: "{{ vm_vars.nas_app_password | default(vm_vars.vminfo.hostname) | quote or omit }}"}
+       - {key: "--internal-hostname", value: "{{ ansible_hostname }}"}
+       - {key: "--overseerr-api", value: "{{ vm_vars.overseerr_apikey }}"}
 
     - name: debug
       debug:
         msg: "{{ cf_string }}"
+
+    - name: Check if Plex is configured
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:32400"
+        method: GET
+        return_content: yes
+        status_code: [200, 401]
+      register: plex_response
+      retries: 5
+      delay: 10
+
+    - name: Wait for Plex config to be done
+      pause:
+        prompt: Plex is not configured yet. Please login to Plex (http://{{ ansible_hostname }}.local:32400/web) and configure the server. Press enter when done.\nAlso configure Overseer after Plex is done if you want to use Overseer
+      when: plex_response.status != 401
 
     - name: Run configurator (with opensubtitles support)
       command: "{{ cf_string }}"

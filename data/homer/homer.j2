@@ -80,12 +80,12 @@ services:
   - name: "Downloaders"
     icon: "fas fa-cloud"
     items:
-      - name: "Ombi"
-        logo: "assets/icons/ombi.png"
+      - name: "Overseerr"
+        logo: "assets/icons/overseerr.png"
         subtitle: "Browse TV, Movies to download"
         tag: "app"
         keywords: "media tv series movie"
-        url: "/ombi"
+        url: "http://{{ vm_vars.vminfo.hostname }}:5055"
         target: "_blank" # optional html a tag target attribute
       - name: "Sonarr"
         logo: "assets/icons/sonarr.png"
@@ -140,10 +140,10 @@ services:
   - name: "Torrents"
     icon: "fas fa-cloud"
     items:
-      - name: "Deluge"
-        logo: "assets/icons/deluge.png"
-        subtitle: "Deluge"
+      - name: "qBittorrent"
+        logo: "assets/icons/qbittorrent.png"
+        subtitle: "qBittorrent"
         tag: "app"
-        keywords: "plex media movie tv"
-        url: "/deluge"
+        keywords: "torrents downloads"
+        url: "http://{{ vm_vars.vminfo.hostname }}:8088"
         target: "_blank" # optional html a tag target attribute
