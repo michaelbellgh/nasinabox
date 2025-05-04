@@ -1,8 +1,0 @@
-{{ sonarr
-lidarr
-radarr
-bazarr
-nas
-prowlarr
-deluge
-readarr

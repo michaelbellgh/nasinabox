@@ -799,6 +799,18 @@ def overseerr_configure_plex(overseerr_instance: darr_instance, plex_hostname: s
 
     return response.status_code in (200, 201)
 
+
+def overseerr_add_local_user(overseerr_instance: darr_instance, local_username: str, local_password: str, local_email: str) -> bool:
+    url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/user"
+    json_data = {"email": local_email, "password": local_password, "username": local_username}
+    response = requests.post(url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key}, json=json_data)
+
+    print(response.request.body)
+    print(response.request.headers)
+
+
+    return response.status_code in (200, 201)
+
 def overseerr_set_plex_library_sync(overseerr_instance: darr_instance, plex_hostname: str, plex_port: int) -> bool:
     url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/plex/library?sync=true"
     response = requests.get(url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key})
@@ -1172,6 +1184,7 @@ def configure_all_apps(vars):
     import_user_success = overserr_import_plex_users(overseerr, plex_sid)
 
     overseerr_configure_plex(overseerr, vars["internal_hostname"] + ".local", 32400)
+    overseerr_add_local_user(overseerr, vars["app_username"], vars["app_password"], vars["app_username"] + "@" + vars["internal_hostname"] + ".local")
     overseerr_set_plex_library_sync(overseerr, vars["internal_hostname"] + ".local", 32400)
     overseerr_add_sonarr_and_radarr(overseerr, sonarr, radarr)
     overseerr_test_radarr_sonarr(overseerr, sonarr, radarr)
