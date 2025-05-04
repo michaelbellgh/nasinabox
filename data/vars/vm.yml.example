@@ -1,6 +1,45 @@
+<<<<<<< HEAD
 creds: {guest_pass: nasinabox, guest_user: nasinabox}
 
 nas: { open_subtitles_username: "myusername", open_subtitles_password: "mypassword",  storage_path: "/mnt/Storage/",  nas_app_username: "nasinabox", nas_app_password: "nasinabox"}
+=======
+creds: {guest_pass: mynasinaboxuser, guest_user: mynasinaboxpassword}
+
+nas: { open_subtitles_username: "myusername",
+ open_subtitles_password: "mypassword",
+ storage_path: "/mnt/Storage/",
+ nas_app_username: "nasinabox",
+ nas_app_password: "nasinabox",
+ default_to_ssl: False
+}
+
+local_username: "myappusername"
+local_password: "myapppassword"
+
+
+plex_username: null
+plex_password: null
+
+
+
+#homer_theme: default
+# Can be default or sui
+
+#static_ip: "192.168.1.50/24"
+#static_gw: "192.168.1.1"
+
+#If the above vars are set, a static netplan setup is applied to the first interface
+
+#optional_dns: ["1.1.1.1", "8.8.8.8"]
+# If set, the static netplan is set to use custom DNS servers. If not set, but static IP is, the GW is the DNS server
+
+
+tailscale_auth_key: null
+#Optional support for joining device to tailscale network
+
+#tvdb_ids: [355567]
+#Can automatically add TV shows based on TheTvDB ID's. Will default to all seasons (minus specials) and use default quality profile
+>>>>>>> dev
 
 api_key: "4nnuqufdm909hthay5rnu0fq8mbix36j"
 overseerr_apikey: "MTczMDQ2MjQxMTU0ODMzNGMyY2Q0LTY2ZGEtNDYxYS1hOTA4LWIxMDk1MjFmYzVlOA=="
@@ -10,5 +49,13 @@ vminfo:
 
 tailscale_auth_key: ""
 
+<<<<<<< HEAD
 use_custom_netplan: False
 zfs_drives: []
+=======
+#Type of ZFS raid if used. raidz1 is the default (like RAID5, allows 1 disk to fail, "" will let ZFS work with no raid/just join the drives together)
+zfs_type: "raidz1"
+
+
+
+>>>>>>> dev

@@ -1,12 +1,15 @@
 ---
  - name: Configure NAS (implementation stage)
    gather_facts: false
-   hosts: nas
+   hosts: all
    become: yes
    become_method: sudo
    tasks:
 
 
+    - name: Show first IP address from proxmox plugin data
+      debug:
+        msg: "{{ hostvars }}"
     - name: Load VM variables
       include_vars:
         file: ../data/vars/vm.yml
@@ -62,7 +65,10 @@
        - { name: "net.ipv6.conf.all.disable_ipv6", value: 1}
        - { name: "net.ipv6.conf.all.autoconf", value: 0}
        - { name: "net.ipv6.conf.all.accept_ra", value: 0}
+<<<<<<< HEAD
        
+=======
+>>>>>>> dev
     - name: Set hostname
       ansible.builtin.hostname:
         name: "{{ vm_vars.vminfo.hostname }}"
@@ -85,7 +91,11 @@
         path: "/etc/netplan/00-installer-config.yaml"
         state: absent
       when: "'use_custom_netplan' in vm_vars and vm_vars['use_custom_netplan'] | bool"
+<<<<<<< HEAD
       
+=======
+
+>>>>>>> dev
     - name: Install netplan configuration
       copy:
         dest: "/etc/netplan/custom.yaml"
@@ -277,6 +287,7 @@
         force: yes
       vars:
         apps:
+<<<<<<< HEAD
         - {name: "sonarr", dsts: ["/sonarr*"], dial: "sonarr:8989" }
         - {name: "radarr", dsts: ["/radarr*"], dial: "radarr:7878" }
         - {name: "overseerr", dsts: ["/overseerr*"], dial: "overseerr:5055" }
@@ -286,6 +297,16 @@
         - {name: "prowlarr", dsts: ["/prowlarr*"], dial: "prowlarr:9696" }
         - {name: "homer", dsts: ["/*"], dial: "homer:8080" }
         - {name: "deemix", dsts: ["/deemix*"], dial: "deemix:6595"}
+=======
+        - {name: "sonarr", path: "^\/sonarr(\/.+)?", dial: "sonarr:8989" }
+        - {name: "radarr", path: "^\/radarr(\/.+)?", dial: "radarr:7878" }
+        - {name: "lidarr", path: "^\/lidarr(\/.+)?", dial: "lidarr:8686" }
+        - {name: "bazarr", path: "^\/bazarr(\/.+)?", dial: "bazarr:6767" }
+        - {name: "readarr", path: "^\/readarr(\/.+)?", dial: "readarr:8787" }
+        - {name: "prowlarr", path: "^\/prowlarr(\/.+)?", dial: "prowlarr:9696" }
+        - {name: "homer", dial: "homer:8080" }
+        - {name: "deemix", path: "^\/deemix(\/.+)?", dial: "deemix:6595"}
+>>>>>>> dev
       
       
     - name: Enable unattended-upgrades
@@ -323,27 +344,44 @@
     - name: Set ZFS variables
       set_fact:
         single_disk: "{{ vm_vars.zfs_drives | length == 0 }}"
+<<<<<<< HEAD
+=======
+      when: vm_vars.zfs_drives is defined
+>>>>>>> dev
 
     - name: Make mount point
       file: 
         path: "{{ vm_vars.nas.storage_path | default('/mnt/Storage/') }}"
         state: directory
+<<<<<<< HEAD
       when: single_disk
+=======
+      when: single_disk is not defined
+>>>>>>> dev
 
     - name: Get zpool info
       command: "zfs list"
       register: zfacts
+<<<<<<< HEAD
       when: not single_disk 
 
     - name: Try import NAS pool
       command: "zpool import NAS -f"
       when: '"{{ vm_vars.nas.storage_path }}" not in zfacts.stdout and not single_disk'
+=======
+      when: single_disk is not defined or not single_disk 
+
+    - name: Try import NAS pool
+      command: "zpool import NAS -f"
+      when: '"{{ vm_vars.nas.storage_path | default("/mnt/Storage") }}" not in zfacts.stdout and not single_disk'
+>>>>>>> dev
       register: try_import
       ignore_errors: yes
                                                                                      
     - name: Get ZFS pools
       command: "zfs list"
       register: zfs_pools
+<<<<<<< HEAD
       when: not single_disk               
                                                                                      
     - name: Make ZFS pool
@@ -353,13 +391,28 @@
     - name: Make ZFS pool (force)
       command: "zpool create NAS {{ vm_vars.zfs_type }} {{ zfs_list }} -f"
       when: not single_disk and ('NAS' not in zfs_pools.stdout and force is defined)
+=======
+      when: single_disk is not defined or single_disk is not defined or not single_disk            
+                                                                                     
+    - name: Make ZFS pool
+      command: "zpool create NAS {{ vm_vars.zfs_type }} {{ vm_vars.zfs_drives | join(' ') | default }}"
+      when: single_disk is not defined or not single_disk and 'NAS' not in zfs_pools.stdout                       
+
+    - name: Make ZFS pool (force)
+      command: "zpool create NAS {{ vm_vars.zfs_type }} {{ zfs_list }} -f"
+      when: single_disk is not defined or single_disk is not defined or not single_disk and ('NAS' not in zfs_pools.stdout and force is defined)
+>>>>>>> dev
 
 
 
 
     - name: Mount ZFS pool
       command: "zfs set mountpoint={{ vm_vars.nas.storage_path }} NAS"
+<<<<<<< HEAD
       when: vm_vars.zfs_drives is defined and not single_disk
+=======
+      when: single_disk is not defined or vm_vars.zfs_drives is defined and not single_disk
+>>>>>>> dev
       ignore_errors: yes
 
     - name: Fallback to fix mount module issue
@@ -371,7 +424,7 @@
 
     - name: Set permissions on Storage
       file:
-        path: "{{ vm_vars.nas.storage_path }}"
+        path: "{{ vm_vars.nas.storage_path | default ('/mnt/Storage') }}"
         mode: '644'
         state: directory
       become: yes
@@ -397,6 +450,33 @@
        - {src: /tmp/Homer-Theme/assets/wallpaper-light.jpeg, dest: /home/docker/docker_data/homer/wallpaper-light.jpeg }
        - {src: /tmp/Homer-Theme/assets/manifest.json, dest: /home/docker/docker_data/homer/manifest.json }
        - {src: /tmp/Homer-Theme/assets/fonts, dest: /home/docker/docker_data/homer/fonts}
+
+
+    - name: Get running containers
+      docker_host_info:
+        containers: yes
+      register: docker_info
+
+    - name: Stop running containers (for backup)
+      docker_container:
+        name: "{{ item }}"
+        state: stopped
+        comparisons: {"*": "ignore"}
+      loop: "{{ docker_info.containers | map(attribute='Id') }}"
+      when: backup is defined and backup == 'yes'
+
+    - name: Backup the specified directory recursively using ZIP
+      command: "zip -r /tmp/docker_data.zip /home/docker/docker_data/"
+      when: backup is defined and backup == 'yes'
+      ignore_errors: yes
+
+    - name: Copy the backup to the Ansible host
+      fetch:
+        src: /tmp/docker_data.zip
+        dest: docker_backup.zip
+        flat: yes
+      when: backup is defined and backup == 'yes'
+
 
     - name: Set permissions on Docker Data
       file:
@@ -524,7 +604,11 @@
          PUID: "1001"
          PGID: "1001"
         networks:
+<<<<<<< HEAD
         - name: "docker"
+=======
+         - name: "docker"
+>>>>>>> dev
         volumes:
         - /home/docker/docker_data/overseerr/config:/config
         - "/var/www/ssl/:/ssl"
@@ -690,7 +774,11 @@
       shell: "docker kill $(docker ps -q)"
       
     - name: Get hashed password for qBittorent
+<<<<<<< HEAD
       script: scripts/gen_qb_hash.py {{ vm_vars.nas.nas_app_password }}
+=======
+      script: scripts/gen_qb_hash.py {{ vm_vars.nas.nas_app_password | default ('nasinabox') }}
+>>>>>>> dev
       register: qb_hash_output
       
     - set_fact:
@@ -750,6 +838,11 @@
         comparisons: {"*": "ignore"}
         restart: yes
       loop: "{{ docker_info.containers | map(attribute='Id') }}"
+<<<<<<< HEAD
+=======
+      delay: 15
+      retries: 3
+>>>>>>> dev
       when: url_base_output.changed or api_change_output.changed
     
 
@@ -865,11 +958,33 @@
        - {key: "--app-username", value: "{{ vm_vars.nas_app_username | default(vm_vars.vminfo.hostname) | quote or omit }}"}
        - {key: "--app-password", value: "{{ vm_vars.nas_app_password | default(vm_vars.vminfo.hostname) | quote or omit }}"}
        - {key: "--internal-hostname", value: "{{ ansible_hostname }}"}
+<<<<<<< HEAD
+=======
+       - {key: "--overseerr-api", value: "{{ vm_vars.overseerr_apikey }}"}
+>>>>>>> dev
 
     - name: debug
       debug:
         msg: "{{ cf_string }}"
 
+<<<<<<< HEAD
+=======
+    - name: Check if Plex is configured
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:32400"
+        method: GET
+        return_content: yes
+        status_code: [200, 401]
+      register: plex_response
+      retries: 5
+      delay: 10
+
+    - name: Wait for Plex config to be done
+      pause:
+        prompt: Plex is not configured yet. Please login to Plex (http://{{ ansible_hostname }}.local:32400/web) and configure the server. Press enter when done.\nAlso configure Overseer after Plex is done if you want to use Overseer
+      when: plex_response.status != 401
+
+>>>>>>> dev
     - name: Run configurator (with opensubtitles support)
       command: "{{ cf_string }}"
       delegate_to: localhost

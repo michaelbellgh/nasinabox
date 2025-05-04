@@ -10,6 +10,7 @@ from urllib.parse import quote
 urllib3.disable_warnings()
 
 customisation_params = {
+<<<<<<< HEAD
     "ombi_title": "Ombi",
     "url_mode": "path",
     "instance_name": "dennas",
@@ -21,6 +22,19 @@ customisation_params = {
     "ombi_path": "/ombi",
     "validate_ssl": False,
     "preferr_dv": False
+=======
+						 
+    "url_mode": "path",
+    "instance_name": "nasinabox",
+    "sonarr_path": "/sonarr",
+    "lidarr_path": "/lidarr",
+    "radarr_path": "/radarr",
+    "torrent_path": "/qbittorrent",
+    "download_directory": "/downloads",									  
+    "validate_ssl": False,
+    "prefer_dv": True,
+    "custom_plex_address": "http://nasinabox.local:32400"
+>>>>>>> dev
 
 }
 
@@ -193,6 +207,7 @@ def ombi_upload_lidarr_profiles(ombi: ombi_instance, lidarr_hostname: str, lidar
     print(response.text)
 
 
+<<<<<<< HEAD
 def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, plex_password: str, api_key: str, scheme: str="https", validate_certificates: bool=False, local_username: str="admin", local_password: str="password", app_url: str="") -> bool:
     
     uri = scheme + "://" + hostname + ":" + str(port) + path
@@ -234,6 +249,42 @@ def ombi_initial_setup(hostname: str, port: int, path: str, plex_username: str, 
         })
     ombi_std_post("api/v2/Features/enable", [{"name":"Movie4KRequests","enabled": True},{"name":"OldTrendingSource","enabled": False}])
     
+=======
+																																																																
+	
+															
+							 
+				  
+	
+									  
+																																								   
+	
+									 
+																																								  
+
+															   
+																									 
+																													 
+
+																														  
+																																			   
+
+																																	
+													 
+								
+							  
+							
+								  
+										
+								  
+							 
+								  
+								   
+									 
+		  
+																																	   
+	
+>>>>>>> dev
 
 
 
@@ -774,7 +825,15 @@ def prowlarr_add_flaresolverr(prowlarr_instance: darr_instance, validate_ssl: bo
 
 ### Overseerr methods
 def plex_get_server_id(scheme: str, hostname: str, port: int, validate_ssl: bool=False) -> str:
+<<<<<<< HEAD
     url = f"{scheme}://{hostname}:{str(port)}/identity"
+=======
+    url = ""
+    if "custom_plex_address" in customisation_params:
+        url = f"{customisation_params["custom_plex_address"]}/identity"
+    else:
+        url = f"{scheme}://{hostname}:{str(port)}/identity"
+>>>>>>> dev
     response = requests.get(url, verify=validate_ssl)
 
     xml = ET.fromstring(response.text)
@@ -783,26 +842,86 @@ def plex_get_server_id(scheme: str, hostname: str, port: int, validate_ssl: bool
     return att
 
 def overserr_import_plex_users(overseerr_instance: darr_instance, machine_ids: list[str]) -> bool:
+<<<<<<< HEAD
     url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/user/import-from-plex"
     response = requests.post(url, verify=overseerr_instance.ssl, headers={"X-Api-Key": overseerr_instance.api_key}, json={"plexIds": [machine_ids]})
+=======
+    url = ""
+    #if "custom_plex_address" in customisation_params:
+    #    url =
+    url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/user/import-from-plex"
+    response = requests.post(url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key}, json={"plexIds": [machine_ids]})
+>>>>>>> dev
 
     return response.status_code in (200, 201)
 
 def overseerr_configure_plex(overseerr_instance: darr_instance, plex_hostname: str, plex_port: int) -> bool:
     url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/plex"
     json_data = {"ip": plex_hostname, "port": plex_port, "useSsl": False}
+<<<<<<< HEAD
     response = requests.post(url, verify=overseerr_instance.ssl, headers={"X-Api-Key": overseerr_instance.api_key}, json=json_data)
+=======
+    response = requests.post(url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key}, json=json_data)
+
+    print(response.request.body)
+    print(response.request.headers)
+
+
+    return response.status_code in (200, 201)
+
+
+def overseerr_add_local_user(overseerr_instance: darr_instance, local_username: str, local_password: str, local_email: str) -> bool:
+    url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/user"
+    json_data = {"email": local_email, "password": local_password, "username": local_username}
+    response = requests.post(url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key}, json=json_data)
+
+    print(response.request.body)
+    print(response.request.headers)
+
+
+    return response.status_code in (200, 201)
+
+def overseerr_set_plex_library_sync(overseerr_instance: darr_instance, plex_hostname: str, plex_port: int) -> bool:
+    url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/plex/library?sync=true"
+    response = requests.get(url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key})
+
+    ids = []
+
+    json_response = response.json()
+    if len(json_response) > 0:
+        for item in json_response:
+            if 'id' in item:
+                ids.append(item["id"])
+
+    if len(ids) > 0:
+        url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/plex/library?sync=true&enable={",".join(ids)}"
+        response = requests.get(url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key})
+>>>>>>> dev
 
     return response.status_code in (200, 201)
 
 def overseerr_add_sonarr_and_radarr(overseerr_instance: darr_instance, sonarr_internal_instance: darr_instance, radarr_internal_instance: darr_instance) -> bool:
     radarr_url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/radarr"
+<<<<<<< HEAD
+=======
+    current_clients = requests.get(radarr_url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key})
+    current_clients = current_clients.json()
+    radarr_clients = []
+    if len(current_clients) > 0:
+        current_clients = [x["name"] for x in current_clients]
+        radarr_clients.extend(current_clients)
+
+>>>>>>> dev
     radarr_json = {
         "name": "radarr",
         "hostname": radarr_internal_instance.internal_hostname,
         "port": 7878,
         "apiKey": radarr_internal_instance.api_key,
+<<<<<<< HEAD
         "useSsl": radarr_internal_instance.ssl,
+=======
+        "useSsl": radarr_internal_instance.internal_scheme == "https",
+>>>>>>> dev
         "baseUrl": radarr_internal_instance.path,
         "activeProfileId": 1,
         "activeProfileName": "Any",
@@ -815,16 +934,36 @@ def overseerr_add_sonarr_and_radarr(overseerr_instance: darr_instance, sonarr_in
         "preventSearch": False,
         "tagRequests": True
     }
+<<<<<<< HEAD
     response = requests.post(radarr_url, verify=overseerr_instance.ssl, headers={"X-Api-Key": overseerr_instance.api_key}, json=radarr_json)
     radarr_result = response.status_code in (200, 201)
 
     sonarr_url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/sonarr"
+=======
+
+    if "radarr" not in radarr_clients:
+        response = requests.post(radarr_url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key}, json=radarr_json)
+        radarr_result = response.status_code in (200, 201)
+    
+
+    sonarr_url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/sonarr"
+    current_clients = requests.get(sonarr_url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key}).json()
+    sonarr_clients = []
+    if len(current_clients) > 0:
+        current_clients = [x["name"] for x in current_clients]
+        sonarr_clients.extend(current_clients)
+
+>>>>>>> dev
     sonarr_json = {
 	  "name": "sonarr",
 	  "hostname": sonarr_internal_instance.hostname,
 	  "port": 8989,
 	  "apiKey": sonarr_internal_instance.api_key,
+<<<<<<< HEAD
 	  "useSsl": sonarr_internal_instance.ssl,
+=======
+	  "useSsl": sonarr_internal_instance.internal_scheme == "https",
+>>>>>>> dev
 	  "baseUrl": sonarr_internal_instance.path,
 	  "activeProfileId": 1,
 	  "activeLanguageProfileId": 1,
@@ -843,6 +982,7 @@ def overseerr_add_sonarr_and_radarr(overseerr_instance: darr_instance, sonarr_in
 	  "preventSearch": False,
 	  "tagRequests": True
 	}
+<<<<<<< HEAD
     response = requests.post(sonarr_url, verify=overseerr_instance.ssl, headers={"X-Api-Key": overseerr_instance.api_key}, json=sonarr_json)
     sonarr_result = response.status_code in (200, 201)
 
@@ -850,11 +990,81 @@ def overseerr_add_sonarr_and_radarr(overseerr_instance: darr_instance, sonarr_in
 def overseerr_set_init_flag(overseerr_instance: darr_instance) -> bool:
     url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/initialize"
     response = requests.post(url, headers={"X-Api-Key": overseerr_instance.api_key}, json={"initialized": True})
+=======
+    if "sonarr" not in sonarr_clients:
+        response = requests.post(sonarr_url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key}, json=sonarr_json)
+        sonarr_result = response.status_code in (200, 201)
+
+def overseerr_test_radarr_sonarr(overseerr_instance: darr_instance, sonarr_internal_instance: darr_instance, radarr_internal_instance: darr_instance) -> bool:
+
+
+    session = requests.Session()
+
+
+    sonarr_url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/sonarr/test"
+    sonarr_json = {
+        "apiKey": sonarr_internal_instance.api_key,
+        "baseUrl": sonarr_internal_instance.path,
+        "hostname": sonarr_internal_instance.internal_hostname,
+        "port": 8989,
+        "useSsl": sonarr_internal_instance.internal_scheme == "https"
+    }
+    response = session.post(sonarr_url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key, "Accept" : "application/json, text/plain, */*"}, json=sonarr_json,)
+    del sonarr_json["baseUrl"]
+    response = session.post(sonarr_url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key}, json=sonarr_json)
+
+    radarr_url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/radarr/test"
+    radarr_json = {
+        "hostname": radarr_internal_instance.internal_hostname,
+        "port": 7878,
+        "apiKey": radarr_internal_instance.api_key,
+        "baseUrl": radarr_internal_instance.path,
+        "useSsl": radarr_internal_instance.internal_scheme == "https"
+    }
+    response = session.post(radarr_url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key, "Accept" : "application/json, text/plain, */*"}, json=radarr_json)
+    del radarr_json["baseUrl"]
+    response = session.post(radarr_url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key}, json=radarr_json)
+    session.close()
+
+    return response.status_code in (200, 201)
+
+def overseerr_set_init_flag(overseerr_instance: darr_instance) -> bool:
+    url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/initialize"
+    response = requests.post(url, headers={"X-Api-Key": overseerr_instance.api_key}, json={"initialized": True}, verify=False)
+>>>>>>> dev
 
     return response.status_code in (200, 201)
 
 
+<<<<<<< HEAD
 
+=======
+def overseerr_do_sonarr_test(overseerr_instance: darr_instance, service: darr_instance) -> bool:
+    url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/sonarr/test"
+    service_body = {
+        "hostname": service.internal_hostname,
+        "apiKey": service.api_key,
+        "port": service.internal_port,
+        "baseUrl": service.path,
+        "useSsl": False
+    }
+    response = requests.post(url, headers={"X-Api-Key": overseerr_instance.api_key}, json=service_body, verify=False)
+
+    return response.status_code in (200, 201)
+
+def overseerr_do_radarr_test(overseerr_instance: darr_instance, service: darr_instance) -> bool:
+    url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/radarr/test"
+    service_body = {
+        "hostname": service.internal_hostname,
+        "apiKey": service.api_key,
+        "port": service.internal_port,
+        "baseUrl": service.path,
+        "useSsl": False
+    }
+    response = requests.post(url, headers={"X-Api-Key": overseerr_instance.api_key}, json=service_body, verify=False)
+
+    return response.status_code in (200, 201)
+>>>>>>> dev
 
 
         
@@ -1003,39 +1213,66 @@ def add_quality_profiles(sonarr_instance: darr_instance, radarr_instance: darr_i
     for qp in sonarr_json_files:
         with open(qp) as f:
             sonarr_json = json.loads(f.read())
+<<<<<<< HEAD
         for profile in sonarr_json:
             current_formats = set()
             for format in profile['formatItems']:
+=======
+								   
+            current_formats = set()
+            for format in sonarr_json['formatItems']:
+>>>>>>> dev
                 current_formats.add(format["name"])
                 if format["name"] in custom_formats_sonarr_index:
                     format['format'] = custom_formats_sonarr_index[format["name"]]
 
             for format, format_id in custom_formats_sonarr_index.items():
                 if format not in current_formats:
+<<<<<<< HEAD
                     profile["formatItems"].append({"format": format_id, "name": format,"score": 0})
 
         add_quality_profile(sonarr_instance, sonarr_json[0])
+=======
+                    sonarr_json["formatItems"].append({"format": format_id, "name": format,"score": 0})
+
+        add_quality_profile(sonarr_instance, sonarr_json)
+>>>>>>> dev
 
     for qp in radarr_json_files:
         with open(qp) as f:
             radarr_json = json.loads(f.read())
+<<<<<<< HEAD
         for profile in radarr_json:
             current_formats = set()
             for format in profile['formatItems']:
+=======
+            current_formats = set()
+            for format in radarr_json['formatItems']:
+>>>>>>> dev
                 current_formats.add(format["name"])
                 if format["name"] in custom_formats_radarr_index:
                     format['format'] = custom_formats_radarr_index[format["name"]]
 
             for format, format_id in custom_formats_radarr_index.items():
                 if format not in current_formats:
+<<<<<<< HEAD
                     profile["formatItems"].append({"format": format_id, "name": format,"score": 0})
 
         add_quality_profile(radarr_instance, radarr_json[0])
+=======
+                    radarr_json["formatItems"].append({"format": format_id, "name": format,"score": 0})
+
+        add_quality_profile(radarr_instance, radarr_json)
+>>>>>>> dev
 
     return True
 
 def configure_all_apps(vars):
 
+<<<<<<< HEAD
+=======
+																		 
+>>>>>>> dev
     sonarr, lidarr, radarr, bazarr, readarr, overseerr, prowlarr_instance, prowlarr_internal_instance, radarr_internal_instance, sonarr_internal_instance = [None] * 10
 
     
@@ -1067,6 +1304,7 @@ def configure_all_apps(vars):
     darr_set_authentication(readarr, "Readarr", customisation_params["instance_name"], customisation_params["instance_name"], "none", api_version="v1")
 
     
+<<<<<<< HEAD
     darr_add_download_client(sonarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_diretory"] + "/tv", "admin" ,"admin", implementation="QBittorrent")
     darr_add_download_client(lidarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_diretory"] + "/music", "admin" ,"admin", implementation="QBittorrent", api_version="v1")
     darr_add_download_client(radarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_diretory"] + "/movies", "admin" ,"admin", implementation="QBittorrent")
@@ -1080,6 +1318,23 @@ def configure_all_apps(vars):
     overseerr_set_init_flag(overseerr)
 
 
+=======
+    darr_add_download_client(sonarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_directory"] + "/tv", "admin" ,"admin", implementation="QBittorrent")
+    darr_add_download_client(lidarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_directory"] + "/music", "admin" ,"admin", implementation="QBittorrent", api_version="v1")
+    darr_add_download_client(radarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_directory"] + "/movies", "admin" ,"admin", implementation="QBittorrent")
+    darr_add_download_client(readarr, "qBittorrent", "qbittorrent", 8088, customisation_params["download_directory"] + "/books", "admin" ,"admin", implementation="QBittorrent", api_version="v1")
+    darr_add_download_client(prowlarr_instance, "qBittorrent", "qbittorrent", 8088, customisation_params["download_directory"], None ,"admin", implementation="QBittorrent", api_version="v1")
+
+    plex_sid = plex_get_server_id("http", vars['hostname'], 32400)
+    import_user_success = overserr_import_plex_users(overseerr, plex_sid)
+
+    overseerr_configure_plex(overseerr, vars["internal_hostname"] + ".local", 32400)
+    overseerr_add_local_user(overseerr, vars["app_username"], vars["app_password"], vars["app_username"] + "@" + vars["internal_hostname"] + ".local")
+    overseerr_set_plex_library_sync(overseerr, vars["internal_hostname"] + ".local", 32400)
+    overseerr_add_sonarr_and_radarr(overseerr, sonarr, radarr)
+    overseerr_test_radarr_sonarr(overseerr, sonarr, radarr)
+    overseerr_set_init_flag(overseerr)
+>>>>>>> dev
 
     darr_add_root_folder(sonarr, "/tv/", "/tv/")
     darr_add_root_folder(lidarr, "/music/", "/music/", api_version="v1", additional_fields={"defaultMetadataProfileId": "1", "defaultQualityProfileId": "1", "defaultTags": []})
@@ -1091,6 +1346,7 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
+<<<<<<< HEAD
 
 
 
@@ -1134,6 +1390,62 @@ def configure_all_apps(vars):
     if os.path.exists("sonarr_profiles" + os.sep + "quality_profiles") and os.path.exists("radarr_profiles" + os.sep + "quality_profiles"):
         add_quality_profiles(sonarr, radarr)
 
+=======
+			   
+												  
+																																			  
+		  
+																																						
+														   
+																																																																																	
+		 
+																																																														 
+																																   
+																															   
+																															
+
+
+
+    darr_add_tag(sonarr, "nohdr", validate_cert=False)
+
+    darr_add_release_profile(sonarr, "Ignore HDR", None, ["\\batmost\\b/i", "/HDR ^|\b(HDR(10\+?)?|dv|dovi|atmos|dolby[-_. ]?vision|HLG)\b/i"], None, ["nohdr"], False)
+    darr_add_release_profile(sonarr, "Optionals", None, ["/^(?=.*(1080|720))(?=.*((x|h)[ ._-]?265|hevc)).*/i"], None, None, False)
+
+    if os.path.exists("preferred.json"):
+        with open("preferred.json", "r") as preferred_file:
+            preferred_json = json.load(preferred_file)
+            sonarr_preferred_streaming = preferred_json["sonarr_preferred_streaming"]
+            sonarr_preferred_p2p = preferred_json["sonarr_preferred_p2p"]
+            sonarr_preferred_lowquality = preferred_json["sonarr_preferred_lowquality"]
+            darr_add_release_profile(sonarr, "Streaming Services", None, None, sonarr_preferred_streaming, None, False)
+            darr_add_release_profile(sonarr, "P2P-Repack-Proper", None, None, sonarr_preferred_p2p, None, False)
+            darr_add_release_profile(sonarr, "Low Quality", None, None, sonarr_preferred_lowquality, None, False)
+            if customisation_params["prefer_dv"]:
+                darr_add_release_profile(sonarr, "Prefer DV then HDR", None, None, preferred_json["prefer_dv"], ["1"], validate_cert=False)
+
+    if os.path.exists("preload.json"):
+        with open("preload.json", "r") as preload_file:
+            preload_json = json.load(preload_file)
+            if "shows" in preload_json:
+                show_dicts = preload_json["shows"]
+                for item in show_dicts:
+                    add_sonarr_show(sonarr, item["tvdb_id"], 
+                                    item["monitor"] if "monitor" in item else "all",
+                                    quality_profile_id=item["quality_id"] if "quality_id" in item else 1)
+            if "movies" in preload_json:
+                movie_dicts = preload_json["movies"]
+                for item in movie_dicts:
+                    add_radarr_movie(radarr, item["tmdb_id"],
+                                    item["monitor"] if "monitor" in item else "movieOnly",
+                                    quality_profile_id=item["quality_id"] if "quality_id" in item else 1)
+                    
+    if os.path.exists("sonarr_profiles") and os.path.exists("radarr_profiles"):
+        add_custom_formats(sonarr, radarr)
+    
+    if os.path.exists("sonarr_profiles" + os.sep + "quality_profiles") and os.path.exists("radarr_profiles" + os.sep + "quality_profiles"):
+        add_quality_profiles(sonarr, radarr)
+
+>>>>>>> dev
 
     indexers = prowlarr_get_all_public_indexers(prowlarr_instance, False, prowlarr_instance.api_key)
     prowlarr_add_indexers(prowlarr_instance, False, prowlarr_instance.api_key, indexers)
@@ -1168,5 +1480,6 @@ def main():
 
     configure_all_apps(args)
     print("success")
+    return 0
 
 main()

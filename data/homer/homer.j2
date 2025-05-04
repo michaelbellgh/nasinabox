@@ -1,6 +1,10 @@
 ---
 # Homepage configuration
+<<<<<<< HEAD
 # See {{ caddy_default_scheme | default('http') }}://fontawesome.com/v5/search for icons options
+=======
+# See {{ default_scheme }}://fontawesome.com/v5/search for icons options
+>>>>>>> dev
 
 title: "NAS"
 subtitle: "Media Server"
@@ -23,7 +27,7 @@ colors:
     background: "#12152B"
     card-background: "rgba(255, 245, 242, 0.8)"
     text: "#ffffff"
-    text-header: "#fafafa"
+    text-header: "#000000"
     text-title: "#000000"
     text-subtitle: "#111111"
     card-shadow: rgba(0, 0, 0, 0.5)
@@ -37,7 +41,7 @@ colors:
     background: "#12152B"
     card-background: "rgba(24, 28, 58, 0.8)"
     text: "#eaeaea"
-    text-header: "#7C71DD"
+    text-header: "#ffffff"
     text-title: "#fafafa"
     text-subtitle: "#8B8D9C"
     card-shadow: rgba(0, 0, 0, 0.5)
@@ -46,16 +50,25 @@ colors:
     background-image: "../assets/dark.jpg"
 
 
+
 # Optional navbar
 # links: [] # Allows for navbar (dark mode, layout, and search) without any links
 #links:
 #  - name: "Contribute"
 #    icon: "fab fa-github"
+<<<<<<< HEAD
 #    url: "{{ caddy_default_scheme | default('http') }}://github.com/bastienwirtz/homer"
 #    target: "_blank" # optional html a tag target attribute
 #  - name: "Wiki"
 #    icon: "fas fa-book"
 #    url: "{{ caddy_default_scheme | default('http') }}://www.wikipedia.org/"
+=======
+#    url: "{{ default_scheme }}://github.com/bastienwirtz/homer"
+#    target: "_blank" # optional html a tag target attribute
+#  - name: "Wiki"
+#    icon: "fas fa-book"
+#    url: "{{ default_scheme }}://www.wikipedia.org/"
+>>>>>>> dev
   # this will link to a second homer page that will load config from additional-page.yml and keep default config values as in config.yml file
   # see url field and assets/additional-page.yml.dist used in this example:
  # - name: "another page!"
@@ -139,10 +152,19 @@ services:
   - name: "Torrents"
     icon: "fas fa-cloud"
     items:
+<<<<<<< HEAD
       - name: "qBittorent"
         logo: "assets/icons/qbittorrent.png"
         subtitle: "Torrent client"
         tag: "app"
         keywords: "plex media movie tv"
         url: "http://{{ vm_vars.vminfo.hostname }}.local:8088"
+=======
+      - name: "qBittorrent"
+        logo: "assets/icons/qbittorrent.png"
+        subtitle: "qBittorrent"
+        tag: "app"
+        keywords: "torrents downloads"
+        url: "http://{{ vm_vars.vminfo.hostname }}:8088"
+>>>>>>> dev
         target: "_blank" # optional html a tag target attribute

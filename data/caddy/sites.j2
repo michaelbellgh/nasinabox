@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
 	"admin":  {"disabled": false, "listen": ":2019" },
+=======
+	"admin":  {"disabled": false, "listen": ":2019"},
+>>>>>>> dev
 	"logging": {
 		"sink": {
 			"writer": {"output": "stdout"}
@@ -36,6 +40,7 @@
 		"http": {
 		"servers": {
 			"rev_proxy": {
+<<<<<<< HEAD
 			"listen": [":80", ":443"],
 			"routes": [ {% for app in apps %}
 				{
@@ -43,6 +48,20 @@
 				[{
 					"path": [{% for path in app.dsts %}"{{ path }}"{% if not loop.last %},{% endif %}{% endfor %}]
 				}],
+=======
+			"listen": [":80"],
+			"routes": [ {% for app in apps %}
+				{
+				{% if app.path is defined %}
+				"match": [
+					{
+						"path_regexp":
+					{
+						"pattern": "{{ app.path }}"
+					}
+					}
+				],{% endif %}
+>>>>>>> dev
 				"handle": [
 					{
 					"handler": "reverse_proxy",

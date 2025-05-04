@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 [{
+=======
+{
+>>>>>>> dev
     "name": "HD Bluray + WEB",
     "upgradeAllowed": true,
     "cutoff": 7,
@@ -1170,5 +1174,9 @@
       "id": 1,
       "name": "English"
     }
+<<<<<<< HEAD
   }
 ]
+=======
+  }
+>>>>>>> dev

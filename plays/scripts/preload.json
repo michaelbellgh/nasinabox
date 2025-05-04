@@ -1,8 +1,24 @@
 {
+<<<<<<< HEAD
     "movies":
     [
     {
         "tmdb_id": 1114894
     }
+=======
+    "shows": [
+    {
+     "tvdb_id": 71471,
+     "monitored": "all",
+     "quality_id": 1
+    }
+    ],
+    "movies": [
+        {
+            "tmdb_id": 9833,
+            "monitored": "movieOnly",
+            "quality_id": 1
+        }
+>>>>>>> dev
     ]
 }

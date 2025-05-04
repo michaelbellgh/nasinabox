@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 [{
+=======
+{
+>>>>>>> dev
     "name": "Web-1080P",
     "upgradeAllowed": true,
     "cutoff": 1002,
@@ -1065,5 +1069,9 @@
         "score": 0
       }
     ]
+<<<<<<< HEAD
   }
 ]
+=======
+  }
+>>>>>>> dev

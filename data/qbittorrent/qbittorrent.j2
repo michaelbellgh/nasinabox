@@ -28,11 +28,21 @@ Session\I2P\Enabled=false
 Session\IgnoreLimitsOnLAN=true
 Session\IgnoreSlowTorrentsForQueueing=true
 Session\InterfaceAddress=0.0.0.0
+<<<<<<< HEAD
 Session\MaxActiveDownloads=30
 Session\MaxActiveTorrents=50
 Session\MaxActiveUploads=10
 Session\MaxConnections=2000
 Session\MaxConnectionsPerTorrent=1000
+=======
+Session\MaxActiveDownloads=1000
+Session\MaxActiveTorrents=1000
+Session\MaxActiveUploads=100
+Session\GlobalMaxRatio=1
+Session\GlobalMaxSeedingMinutes=60
+Session\MaxConnections=100000
+Session\MaxConnectionsPerTorrent=10000
+>>>>>>> dev
 Session\Port=6881
 Session\QueueingSystemEnabled=true
 Session\ReannounceWhenAddressChanged=true
@@ -78,6 +88,10 @@ WebUI\Port=8088
 WebUI\RootFolder=
 WebUI\ServerDomains=*
 WebUI\Username={{ vm_vars.nas.nas_app_username }}
+<<<<<<< HEAD
+=======
+WebUI\Password_PBKDF2="@ByteArray(emZc8ieVNiwVYGanEdI2Gg==:JulbEygjRBfH9RKANUAsHwqXbLwHQZZCiMqILlWb7aBUfissTSbpyv24ogSag8iao2riiyjdMXVB+ocoj1mXpA==)"
+>>>>>>> dev
 
 [RSS]
 AutoDownloader\DownloadRepacks=true

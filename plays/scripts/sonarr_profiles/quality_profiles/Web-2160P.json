@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 [{
+=======
+{
+>>>>>>> dev
     "name": "Web-2160P",
     "upgradeAllowed": true,
     "cutoff": 1003,
@@ -1061,5 +1065,9 @@
         "score": 0
       }
     ]
+<<<<<<< HEAD
   }
 ]
+=======
+  }
+>>>>>>> dev
