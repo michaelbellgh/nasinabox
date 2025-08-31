@@ -36,13 +36,12 @@ tailscale_auth_key: null
 #Can automatically add TV shows based on TheTvDB ID's. Will default to all seasons (minus specials) and use default quality profile
 
 api_key: "4nnuqufdm909hthay5rnu0fq8mbix36j"
+overseerr_apikey: "MTczMDQ2MjQxMTU0ODMzNGMyY2Q0LTY2ZGEtNDYxYS1hOTA4LWIxMDk1MjFmYzVlOA=="
 
 vminfo:
    hostname: nasinabox
 
-zfs_drives: []
-#If you want to make the storage drive a ZFS pool, specify a list of drives e.g.
-#zfs_drives: ["/dev/sda", "/dev/sdb", "/dev/sdc", "/dev/sdd"]
+tailscale_auth_key: ""
 
 #Type of ZFS raid if used. raidz1 is the default (like RAID5, allows 1 disk to fail, "" will let ZFS work with no raid/just join the drives together)
 zfs_type: "raidz1"
