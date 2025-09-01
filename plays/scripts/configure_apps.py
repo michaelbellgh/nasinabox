@@ -1214,8 +1214,6 @@ def configure_all_apps(vars):
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 
 
 
@@ -1259,25 +1257,8 @@ def configure_all_apps(vars):
     if os.path.exists("sonarr_profiles" + os.sep + "quality_profiles") and os.path.exists("radarr_profiles" + os.sep + "quality_profiles"):
         add_quality_profiles(sonarr, radarr)
 
-=======
-=======
+
     readarr_set_metadata_server(readarr, validate_ssl=customisation_params["validate_ssl"])
-
->>>>>>> dev
-			   
-												  
-																																			  
-		  
-																																						
-														   
-																																																																																	
-		 
-																																																														 
-																																   
-																															   
-																															
-
-
 
     darr_add_tag(sonarr, "nohdr", validate_cert=False)
 
@@ -1317,8 +1298,6 @@ def configure_all_apps(vars):
     
     if os.path.exists("sonarr_profiles" + os.sep + "quality_profiles") and os.path.exists("radarr_profiles" + os.sep + "quality_profiles"):
         add_quality_profiles(sonarr, radarr)
-
->>>>>>> dev
 
     indexers = prowlarr_get_all_public_indexers(prowlarr_instance, False, prowlarr_instance.api_key)
     prowlarr_add_indexers(prowlarr_instance, False, prowlarr_instance.api_key, indexers)
