@@ -1,7 +1,7 @@
 ---
  - name: Configure NAS (implementation stage)
    gather_facts: false
-   hosts: all
+   hosts: nasinabox
    become: yes
    become_method: sudo
    tasks:
@@ -934,7 +934,7 @@
 
     - name: Wait for Plex config to be done
       pause:
-        prompt: Plex is not configured yet. Please login to Plex (http://{{ ansible_hostname }}.local:32400/web) and configure the server. Press enter when done.\nAlso configure Overseer after Plex is done if you want to use Overseer
+        prompt: Plex is not configured yet. Please login to Plex (http://{{ ansible_hostname }}:32400/web) and configure the server. Press enter when done.\nAlso configure Overseer after Plex is done if you want to use Overseer
       when: plex_response.status != 401
 
     - name: Run configurator (with opensubtitles support)

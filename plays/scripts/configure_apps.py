@@ -1140,6 +1140,20 @@ def add_quality_profiles(sonarr_instance: darr_instance, radarr_instance: darr_i
 
     return True
 
+def readarr_set_metadata_server(readarr_instance: darr_instance, metadata_server: str="https://api.bookinfo.pro", validate_ssl: bool=False) -> bool:
+    url = readarr_instance.scheme + "://" + readarr_instance.hostname + readarr_instance.path + "/api/v1/config/development"
+    json_data = {
+        "consoleLogLevel": "",
+        "filterSentryEvents": True,
+        "id": 1,
+        "logRotate": 50,
+        "logSql": False,
+        "metadataSource": metadata_server
+    }
+
+    response = requests.put(url, json=json_data, verify=False, headers={"X-Api-Key": readarr_instance.api_key})
+    return response.status_code in (200, 201, 409)
+
 def configure_all_apps(vars):
 
 																		 
@@ -1199,6 +1213,8 @@ def configure_all_apps(vars):
     bazarr_configure_sonarr_provider(bazarr, sonarr)
     bazarr_configure_radarr_provider(bazarr, radarr)
     bazarr_configure_lang_profile(bazarr)
+
+    readarr_set_metadata_server(readarr, validate_ssl=customisation_params["validate_ssl"])
 
 			   
 												  
