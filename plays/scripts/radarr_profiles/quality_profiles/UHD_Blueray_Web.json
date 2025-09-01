@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-[{
-=======
 {
->>>>>>> dev
     "name": "UHD Bluray + WEB",
     "upgradeAllowed": true,
     "cutoff": 19,
@@ -1174,9 +1170,4 @@
       "id": -2,
       "name": "Original"
     }
-<<<<<<< HEAD
   }
-]
-=======
-  }
->>>>>>> dev

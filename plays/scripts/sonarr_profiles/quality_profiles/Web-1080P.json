@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-[{
-=======
 {
->>>>>>> dev
     "name": "Web-1080P",
     "upgradeAllowed": true,
     "cutoff": 1002,
@@ -1068,10 +1064,5 @@
         "name": "x265 (no HDR/DV)",
         "score": 0
       }
-    ]
-<<<<<<< HEAD
-  }
-]
-=======
-  }
->>>>>>> dev
+        ]
+    }

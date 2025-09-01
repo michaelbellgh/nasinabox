@@ -1,7 +1,7 @@
 ---
  - name: Configure NAS (implementation stage)
    gather_facts: false
-   hosts: all
+   hosts: nasinabox
    become: yes
    become_method: sudo
    tasks:
@@ -65,10 +65,8 @@
        - { name: "net.ipv6.conf.all.disable_ipv6", value: 1}
        - { name: "net.ipv6.conf.all.autoconf", value: 0}
        - { name: "net.ipv6.conf.all.accept_ra", value: 0}
-<<<<<<< HEAD
-       
-=======
->>>>>>> dev
+
+
     - name: Set hostname
       ansible.builtin.hostname:
         name: "{{ vm_vars.vminfo.hostname }}"
@@ -91,11 +89,8 @@
         path: "/etc/netplan/00-installer-config.yaml"
         state: absent
       when: "'use_custom_netplan' in vm_vars and vm_vars['use_custom_netplan'] | bool"
-<<<<<<< HEAD
-      
-=======
 
->>>>>>> dev
+
     - name: Install netplan configuration
       copy:
         dest: "/etc/netplan/custom.yaml"
@@ -277,8 +272,9 @@
       become: yes
       with_items:
        - { src: "../data/homer/icons/", dest: "/home/docker/docker_data/homer/icons/", force: yes}
-       - { src: "../data/homer/light.jpg" , dest: "/home/docker/docker_data/homer/light.jpg", force: yes}
-       - { src: "../data/homer/dark.jpg" , dest: "/home/docker/docker_data/homer/dark.jpg", force: yes}
+#       - { src: "../data/huntarr/", dest: "/home/docker/docker_data/huntarr/", force: yes}
+       - { src: "../data/homer/wallpaper-light.jpg" , dest: "/home/docker/docker_data/homer/wallpaper-light.jpg", force: yes}
+       - { src: "../data/homer/wallpaper-dark.jpg" , dest: "/home/docker/docker_data/homer/wallpaper-dark.jpg", force: yes}
 
     - name: Template sites
       template:
@@ -287,26 +283,15 @@
         force: yes
       vars:
         apps:
-<<<<<<< HEAD
-        - {name: "sonarr", dsts: ["/sonarr*"], dial: "sonarr:8989" }
-        - {name: "radarr", dsts: ["/radarr*"], dial: "radarr:7878" }
-        - {name: "overseerr", dsts: ["/overseerr*"], dial: "overseerr:5055" }
-        - {name: "lidarr", dsts: ["/lidarr*"], dial: "lidarr:8686" }
-        - {name: "bazarr", dsts: ["/bazarr*"], dial: "bazarr:6767" }
-        - {name: "readarr", dsts: ["/readarr*"], dial: "readarr:8787" }
-        - {name: "prowlarr", dsts: ["/prowlarr*"], dial: "prowlarr:9696" }
-        - {name: "homer", dsts: ["/*"], dial: "homer:8080" }
-        - {name: "deemix", dsts: ["/deemix*"], dial: "deemix:6595"}
-=======
         - {name: "sonarr", path: "^\/sonarr(\/.+)?", dial: "sonarr:8989" }
         - {name: "radarr", path: "^\/radarr(\/.+)?", dial: "radarr:7878" }
         - {name: "lidarr", path: "^\/lidarr(\/.+)?", dial: "lidarr:8686" }
         - {name: "bazarr", path: "^\/bazarr(\/.+)?", dial: "bazarr:6767" }
         - {name: "readarr", path: "^\/readarr(\/.+)?", dial: "readarr:8787" }
         - {name: "prowlarr", path: "^\/prowlarr(\/.+)?", dial: "prowlarr:9696" }
+        - {name: "huntarr", path: "^\/huntarr(\/.+)?", dial: "huntarr:9705"}
         - {name: "homer", dial: "homer:8080" }
         - {name: "deemix", path: "^\/deemix(\/.+)?", dial: "deemix:6595"}
->>>>>>> dev
       
       
     - name: Enable unattended-upgrades
@@ -344,54 +329,28 @@
     - name: Set ZFS variables
       set_fact:
         single_disk: "{{ vm_vars.zfs_drives | length == 0 }}"
-<<<<<<< HEAD
-=======
       when: vm_vars.zfs_drives is defined
->>>>>>> dev
 
     - name: Make mount point
       file: 
         path: "{{ vm_vars.nas.storage_path | default('/mnt/Storage/') }}"
         state: directory
-<<<<<<< HEAD
-      when: single_disk
-=======
       when: single_disk is not defined
->>>>>>> dev
 
     - name: Get zpool info
       command: "zfs list"
       register: zfacts
-<<<<<<< HEAD
-      when: not single_disk 
-
-    - name: Try import NAS pool
-      command: "zpool import NAS -f"
-      when: '"{{ vm_vars.nas.storage_path }}" not in zfacts.stdout and not single_disk'
-=======
       when: single_disk is not defined or not single_disk 
 
     - name: Try import NAS pool
       command: "zpool import NAS -f"
       when: '"{{ vm_vars.nas.storage_path | default("/mnt/Storage") }}" not in zfacts.stdout and not single_disk'
->>>>>>> dev
       register: try_import
       ignore_errors: yes
                                                                                      
     - name: Get ZFS pools
       command: "zfs list"
       register: zfs_pools
-<<<<<<< HEAD
-      when: not single_disk               
-                                                                                     
-    - name: Make ZFS pool
-      command: "zpool create NAS {{ vm_vars.zfs_type }} {{ vm_vars.zfs_drives | join(' ') }}"
-      when: not single_disk and 'NAS' not in zfs_pools.stdout                       
-
-    - name: Make ZFS pool (force)
-      command: "zpool create NAS {{ vm_vars.zfs_type }} {{ zfs_list }} -f"
-      when: not single_disk and ('NAS' not in zfs_pools.stdout and force is defined)
-=======
       when: single_disk is not defined or single_disk is not defined or not single_disk            
                                                                                      
     - name: Make ZFS pool
@@ -401,18 +360,13 @@
     - name: Make ZFS pool (force)
       command: "zpool create NAS {{ vm_vars.zfs_type }} {{ zfs_list }} -f"
       when: single_disk is not defined or single_disk is not defined or not single_disk and ('NAS' not in zfs_pools.stdout and force is defined)
->>>>>>> dev
 
 
 
 
     - name: Mount ZFS pool
       command: "zfs set mountpoint={{ vm_vars.nas.storage_path }} NAS"
-<<<<<<< HEAD
-      when: vm_vars.zfs_drives is defined and not single_disk
-=======
       when: single_disk is not defined or vm_vars.zfs_drives is defined and not single_disk
->>>>>>> dev
       ignore_errors: yes
 
     - name: Fallback to fix mount module issue
@@ -604,11 +558,7 @@
          PUID: "1001"
          PGID: "1001"
         networks:
-<<<<<<< HEAD
-        - name: "docker"
-=======
          - name: "docker"
->>>>>>> dev
         volumes:
         - /home/docker/docker_data/overseerr/config:/config
         - "/var/www/ssl/:/ssl"
@@ -650,7 +600,7 @@
         published_ports: ["9696:9696"]
         networks:
         - name: "docker"
-          links: ["sonarr", "radarr", "readarr", "deluge"]
+          links: ["sonarr", "radarr", "readarr", "qbittorrent"]
         volumes:
         - /home/docker/docker_data/prowlarr:/config
         - "/var/www/ssl/:/ssl"
@@ -678,7 +628,7 @@
     - name: Start readarr
       docker_container:
         name: readarr
-        image: hotio/readarr:testing
+        image: ghcr.io/hotio/readarr
         env: 
          TZ: Australia/Melbourne
          PUID: "1001"
@@ -691,9 +641,28 @@
         restart_policy: always
         networks:
         - name: "docker"
-          links: ["jackett", "deluge"]
+          links: ["prowlarr", "qbittorrent"]
 
       register: docker_readarr
+
+    - name: Start Huntarr
+      docker_container:
+        name: huntarr
+        image: huntarr/huntarr:latest
+        env:
+          PUID: "1001"
+          PGID: "1001"
+          TZ: Australia/Melbourne
+        volumes:
+        - /home/docker/docker_data/huntarr:/config
+        networks:
+          - name: docker
+        restart_policy: always
+        stop_timeout: 10
+        user: 1001
+        comparisons:
+          networks: strict
+
 
     - name: Start Homer
       docker_container:
@@ -774,11 +743,7 @@
       shell: "docker kill $(docker ps -q)"
       
     - name: Get hashed password for qBittorent
-<<<<<<< HEAD
-      script: scripts/gen_qb_hash.py {{ vm_vars.nas.nas_app_password }}
-=======
       script: scripts/gen_qb_hash.py {{ vm_vars.nas.nas_app_password | default ('nasinabox') }}
->>>>>>> dev
       register: qb_hash_output
       
     - set_fact:
@@ -838,11 +803,8 @@
         comparisons: {"*": "ignore"}
         restart: yes
       loop: "{{ docker_info.containers | map(attribute='Id') }}"
-<<<<<<< HEAD
-=======
       delay: 15
       retries: 3
->>>>>>> dev
       when: url_base_output.changed or api_change_output.changed
     
 
@@ -958,17 +920,12 @@
        - {key: "--app-username", value: "{{ vm_vars.nas_app_username | default(vm_vars.vminfo.hostname) | quote or omit }}"}
        - {key: "--app-password", value: "{{ vm_vars.nas_app_password | default(vm_vars.vminfo.hostname) | quote or omit }}"}
        - {key: "--internal-hostname", value: "{{ ansible_hostname }}"}
-<<<<<<< HEAD
-=======
        - {key: "--overseerr-api", value: "{{ vm_vars.overseerr_apikey }}"}
->>>>>>> dev
 
     - name: debug
       debug:
         msg: "{{ cf_string }}"
 
-<<<<<<< HEAD
-=======
     - name: Check if Plex is configured
       uri:
         url: "http://{{ ansible_default_ipv4.address }}:32400"
@@ -981,10 +938,9 @@
 
     - name: Wait for Plex config to be done
       pause:
-        prompt: Plex is not configured yet. Please login to Plex (http://{{ ansible_hostname }}.local:32400/web) and configure the server. Press enter when done.\nAlso configure Overseer after Plex is done if you want to use Overseer
+        prompt: Plex is not configured yet. Please login to Plex (http://{{ ansible_hostname }}:32400/web) and configure the server. Press enter when done.\nAlso configure Overseer after Plex is done if you want to use Overseer
       when: plex_response.status != 401
 
->>>>>>> dev
     - name: Run configurator (with opensubtitles support)
       command: "{{ cf_string }}"
       delegate_to: localhost

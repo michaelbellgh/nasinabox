@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-[{
-=======
 {
->>>>>>> dev
     "name": "Remux + WEB 2160p",
     "upgradeAllowed": true,
     "cutoff": 31,
@@ -1173,10 +1169,5 @@
     "language": {
       "id": 1,
       "name": "English"
-    }
-<<<<<<< HEAD
   }
-]
-=======
   }
->>>>>>> dev

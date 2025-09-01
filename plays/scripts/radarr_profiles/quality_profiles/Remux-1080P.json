@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-[{
-=======
 {
->>>>>>> dev
     "name": "Remux-1080p",
     "upgradeAllowed": true,
     "cutoff": 30,
@@ -1174,9 +1170,4 @@
       "id": 1,
       "name": "English"
     }
-<<<<<<< HEAD
   }
-]
-=======
-  }
->>>>>>> dev

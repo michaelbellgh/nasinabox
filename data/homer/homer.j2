@@ -1,10 +1,6 @@
 ---
 # Homepage configuration
-<<<<<<< HEAD
-# See {{ caddy_default_scheme | default('http') }}://fontawesome.com/v5/search for icons options
-=======
 # See {{ default_scheme }}://fontawesome.com/v5/search for icons options
->>>>>>> dev
 
 title: "NAS"
 subtitle: "Media Server"
@@ -33,7 +29,7 @@ colors:
     card-shadow: rgba(0, 0, 0, 0.5)
     link: "#3273dc"
     link-hover: "#2e4053"
-    background-image: "../assets/light.jpg"
+    background-image: "../assets/wallpaper-light.jpg"
   dark:
     highlight-primary: "#181C3A"
     highlight-secondary: "#181C3A"
@@ -47,7 +43,7 @@ colors:
     card-shadow: rgba(0, 0, 0, 0.5)
     link: "#c1c1c1"
     link-hover: "#fafafa"
-    background-image: "../assets/dark.jpg"
+    background-image: "../assets/wallpaper-dark.jpg"
 
 
 
@@ -56,19 +52,11 @@ colors:
 #links:
 #  - name: "Contribute"
 #    icon: "fab fa-github"
-<<<<<<< HEAD
-#    url: "{{ caddy_default_scheme | default('http') }}://github.com/bastienwirtz/homer"
-#    target: "_blank" # optional html a tag target attribute
-#  - name: "Wiki"
-#    icon: "fas fa-book"
-#    url: "{{ caddy_default_scheme | default('http') }}://www.wikipedia.org/"
-=======
 #    url: "{{ default_scheme }}://github.com/bastienwirtz/homer"
 #    target: "_blank" # optional html a tag target attribute
 #  - name: "Wiki"
 #    icon: "fas fa-book"
 #    url: "{{ default_scheme }}://www.wikipedia.org/"
->>>>>>> dev
   # this will link to a second homer page that will load config from additional-page.yml and keep default config values as in config.yml file
   # see url field and assets/additional-page.yml.dist used in this example:
  # - name: "another page!"
@@ -87,7 +75,7 @@ services:
         subtitle: "Plex Media Server"
         tag: "app"
         keywords: "plex media movie tv"
-        url: "http://{{ vm_vars.vminfo.hostname }}.local:32400/web/"
+        url: "http://{{ vm_vars.vminfo.hostname }}:32400/web/"
         target: "_blank" # optional html a tag target attribute
   - name: "Downloaders"
     icon: "fas fa-cloud"
@@ -152,19 +140,10 @@ services:
   - name: "Torrents"
     icon: "fas fa-cloud"
     items:
-<<<<<<< HEAD
-      - name: "qBittorent"
-        logo: "assets/icons/qbittorrent.png"
-        subtitle: "Torrent client"
-        tag: "app"
-        keywords: "plex media movie tv"
-        url: "http://{{ vm_vars.vminfo.hostname }}.local:8088"
-=======
       - name: "qBittorrent"
         logo: "assets/icons/qbittorrent.png"
         subtitle: "qBittorrent"
         tag: "app"
         keywords: "torrents downloads"
         url: "http://{{ vm_vars.vminfo.hostname }}:8088"
->>>>>>> dev
         target: "_blank" # optional html a tag target attribute
