@@ -769,7 +769,7 @@ def prowlarr_add_flaresolverr(prowlarr_instance: darr_instance, validate_ssl: bo
 def plex_get_server_id(scheme: str, hostname: str, port: int, validate_ssl: bool=False) -> str:
     url = ""
     if "custom_plex_address" in customisation_params:
-        url = f"{customisation_params["custom_plex_address"]}/identity"
+        url = f"{customisation_params['custom_plex_address']}/identity"
     else:
         url = f"{scheme}://{hostname}:{str(port)}/identity"
     response = requests.get(url, verify=validate_ssl)
@@ -824,7 +824,7 @@ def overseerr_set_plex_library_sync(overseerr_instance: darr_instance, plex_host
                 ids.append(item["id"])
 
     if len(ids) > 0:
-        url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/plex/library?sync=true&enable={",".join(ids)}"
+        url = f"{overseerr_instance.scheme}://{overseerr_instance.hostname}:{str(overseerr_instance.port)}{overseerr_instance.path}/api/v1/settings/plex/library?sync=true&enable={','.join(ids)}"
         response = requests.get(url, verify=False, headers={"X-Api-Key": overseerr_instance.api_key})
 
     return response.status_code in (200, 201)
@@ -1232,7 +1232,7 @@ def configure_all_apps(vars):
             darr_add_release_profile(sonarr, "Streaming Services", None, None, sonarr_preferred_streaming, None, False)
             darr_add_release_profile(sonarr, "P2P-Repack-Proper", None, None, sonarr_preferred_p2p, None, False)
             darr_add_release_profile(sonarr, "Low Quality", None, None, sonarr_preferred_lowquality, None, False)
-            if customisation_params["preferr_dv"]:
+            if customisation_params["prefer_dv"]:
                 darr_add_release_profile(sonarr, "Prefer DV then HDR", None, None, preferred_json["prefer_dv"], ["1"], validate_cert=False)
 
     if os.path.exists("preload.json"):

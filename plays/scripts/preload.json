@@ -1,11 +1,4 @@
 {
-<<<<<<< HEAD
-    "movies":
-    [
-    {
-        "tmdb_id": 1114894
-    }
-=======
     "shows": [
     {
      "tvdb_id": 71471,
@@ -19,6 +12,5 @@
             "monitored": "movieOnly",
             "quality_id": 1
         }
->>>>>>> dev
     ]
 }
