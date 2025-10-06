@@ -129,6 +129,12 @@
         state: fixed
       become: yes
 
+    - name: Install gnupg
+      apt:
+        name: gnupg
+        state: present
+      become: yes
+
 
     - name: GPG Keys
       apt_key:
