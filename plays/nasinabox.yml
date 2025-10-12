@@ -37,6 +37,7 @@
        - "/home/docker/docker_data/caddy"
        - "/home/docker/docker_data/caddy/config"
        - "/home/docker/docker_data/caddy/config/caddy"
+       - "/opt/configure_apps"
 
     - name: Set system settings
       lineinfile:
@@ -278,9 +279,11 @@
       become: yes
       with_items:
        - { src: "../data/homer/icons/", dest: "/home/docker/docker_data/homer/icons/", force: yes}
-#       - { src: "../data/huntarr/", dest: "/home/docker/docker_data/huntarr/", force: yes}
        - { src: "../data/homer/wallpaper-light.jpg" , dest: "/home/docker/docker_data/homer/wallpaper-light.jpg", force: yes}
        - { src: "../data/homer/wallpaper-dark.jpg" , dest: "/home/docker/docker_data/homer/wallpaper-dark.jpg", force: yes}
+       - { src: "scripts/radarr_profiles", dest: "/opt/configure_apps/", force: yes}
+       - { src: "scripts/sonarr_profiles", dest: "/opt/configure_apps/", force: yes}
+       - { src: "scripts/preferred.json", dest: "/opt/configure_apps/", force: yes}
 
     - name: Template sites
       template:
@@ -293,11 +296,9 @@
         - {name: "radarr", path: "^\/radarr(\/.+)?", dial: "radarr:7878" }
         - {name: "lidarr", path: "^\/lidarr(\/.+)?", dial: "lidarr:8686" }
         - {name: "bazarr", path: "^\/bazarr(\/.+)?", dial: "bazarr:6767" }
-        - {name: "readarr", path: "^\/readarr(\/.+)?", dial: "readarr:8787" }
         - {name: "prowlarr", path: "^\/prowlarr(\/.+)?", dial: "prowlarr:9696" }
         - {name: "huntarr", path: "^\/huntarr(\/.+)?", dial: "huntarr:9705"}
         - {name: "homer", dial: "homer:8080" }
-        - {name: "deemix", path: "^\/deemix(\/.+)?", dial: "deemix:6595"}
       
       
     - name: Enable unattended-upgrades
@@ -606,7 +607,7 @@
         published_ports: ["9696:9696"]
         networks:
         - name: "docker"
-          links: ["sonarr", "radarr", "readarr", "qbittorrent"]
+          links: ["sonarr", "radarr", "qbittorrent"]
         volumes:
         - /home/docker/docker_data/prowlarr:/config
         - "/var/www/ssl/:/ssl"
@@ -630,26 +631,6 @@
          - name: docker
       register: docker_flaresolverr
 
-
-    - name: Start readarr
-      docker_container:
-        name: readarr
-        image: ghcr.io/hotio/readarr
-        env: 
-         TZ: Australia/Melbourne
-         PUID: "1001"
-         PGID: "1001"
-        volumes:
-        - "/home/docker/docker_data/readarr:/config"
-        - "/mnt/Storage/Downloads:/downloads"
-        - "{{ vm_vars.nas.storage_path }}Books:/books"
-        - "/var/www/ssl/:/ssl"
-        restart_policy: always
-        networks:
-        - name: "docker"
-          links: ["prowlarr", "qbittorrent"]
-
-      register: docker_readarr
 
     - name: Start Huntarr
       docker_container:
@@ -718,10 +699,8 @@
       docker_container:
         name: caddy
         published_ports: ["2019:2019", "443:443", "80:80"]
-#        recreate: "{{ 'yes' if docker_bazarr.changed or docker_deluge.changed or docker_jackett.changed or docker_readarr.changed or docker_lidarr.changed or docker_ombi.changed or docker_radarr.changed or docker_sonarr.changed | default(no) else omit }}"
         image: "caddy:latest"
         restart_policy: always
-#        command: ["caddy run --config /config/sites.json"]
         command: "caddy run --config /config/sites.json" 
         networks:     
           - name: docker
@@ -772,7 +751,6 @@
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/prowlarr</UrlBase>", path: "/home/docker/docker_data/prowlarr/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/sonarr</UrlBase>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
        - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/radarr</UrlBase>", path: "/home/docker/docker_data/radarr/config/config.xml"}
-       - { regexp: '\<UrlBase\>(.+)?\<\/UrlBase\>', line: "  <UrlBase>/readarr</UrlBase>", path: "/home/docker/docker_data/readarr/config.xml"}
        - { regexp: "base_url:.+", line: "base_url: '/bazarr'", path: "/home/docker/docker_data/bazarr/config/config/config.yaml"}
       register: url_base_output
 
@@ -788,7 +766,6 @@
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/prowlarr/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/sonarr/config/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/radarr/config/config.xml"}
-        - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/readarr/config.xml"}
         - { regexp: '<ApiKey>[a-zA-Z0-9]+<\/ApiKey>', line: "  <ApiKey>{{ vm_vars.api_key }}</ApiKey>", path: "/home/docker/docker_data/prowlarr/config.xml"}
         - { regexp: 'apikey:.+', line: "apikey: {{ vm_vars.api_key }}", path: "/home/docker/docker_data/bazarr/config/config/config.yaml"}
       register: api_change_output
@@ -906,17 +883,17 @@
 
     - name: Set configurator fact base
       set_fact:
-        cf_string: "python3 configure_apps.py -i {{ ansible_default_ipv4.address }} -p {{ caddy_default_port }} -a {{ vm_vars.api_key }} -s {{ default_scheme }}"
+        cf_string: "-i localhost -p {{ caddy_default_port }} -a {{ vm_vars.api_key }} -s {{ default_scheme }}"
       when: domain_name is not defined
 
     - name: Set configurator fact base (domain)
       set_fact:
-        cf_string: "python3 configure_apps.py -i {{ domain_name }} -p {{ caddy_default_port }} -a {{ vm_vars.api_key }} -s {{ default_scheme }}"
+        cf_string: "-i {{ domain_name }} -p {{ caddy_default_port }} -a {{ vm_vars.api_key }} -s {{ default_scheme }}"
       when: domain_name is defined
 
     - name: Add optional vars
       set_fact: 
-        cf_string: "{{ cf_string + ' '  + item.key + ' ' + item.value }}"
+        cf_string: "{{ cf_string + ' '  + item.key + ' ' + item.value }}" 
       when: item != None and item.value != ""
       with_items:
        - {key: "--open-subtitles-username", value: "{{ vm_vars.nas.open_subtitles_username | default(None) | quote or omit }}"}
@@ -947,15 +924,21 @@
         prompt: Plex is not configured yet. Please login to Plex (http://{{ ansible_hostname }}:32400/web) and configure the server. Press enter when done.\nAlso configure Overseer after Plex is done if you want to use Overseer
       when: plex_response.status not in (401, 200)
 
+
+    - name: Copy script to run configurator
+      copy:
+        src: "scripts/configure_apps.py"
+        dest: "/opt/configure_apps/configure_apps.py"
+        mode: '0777'
+        force: yes
+      tags: ["debug", "configurator"]
+
     - name: Run configurator (with opensubtitles support)
-      command: "{{ cf_string }}"
-      delegate_to: localhost
-      args:
-        chdir: scripts
-      become: no
-      register: configurator_w_support
-      failed_when: "'success' not in configurator_w_support.stdout"
+      command: "/usr/bin/python3 /opt/configure_apps/configure_apps.py {{ cf_string }}"
+      become: yes
+      tags: ["debug", "configurator"]
       
+
 
     - name: Enable services
       systemd:
